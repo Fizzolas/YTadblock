@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Ad Blocker Pro</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>YouTube Ad Blocker Pro</h1>
+      <p class="subtitle">Blocking ads seamlessly</p>
+    </header>
+
+    <main>
+      <div class="status-section">
+        <div class="status-indicator">
+          <div class="status-dot" id="statusDot"></div>
+          <span class="status-text" id="statusText">Active</span>
+        </div>
+      </div>
+
+      <div class="stats-section">
+        <div class="stat-card">
+          <div class="stat-value" id="adsBlocked">0</div>
+          <div class="stat-label">Ads Blocked</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="timeRunning">0d</div>
+          <div class="stat-label">Days Running</div>
+        </div>
+      </div>
+
+      <div class="controls-section">
+        <button class="btn btn-primary" id="toggleBtn">
+          <span id="toggleText">Disable</span>
+        </button>
+      </div>
+
+      <div class="info-section">
+        <p class="info-text">
+          ✓ Blocks all YouTube ads<br>
+          ✓ Auto-skips when possible<br>
+          ✓ Removes anti-adblock popups<br>
+          ✓ No manual intervention needed
+        </p>
+      </div>
+    </main>
+
+    <footer>
+      <p class="version">v1.0.0</p>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
