@@ -1,6 +1,6 @@
 // YouTube Ad Blocker Pro - Enhanced Content Script
 // Robust ad blocking with sponsored content removal and anti-adblock popup removal
-// Updated November 2025
+// Updated November 2025 - Hotfix v1.2.1
 
 (function() {
   'use strict';
@@ -14,12 +14,14 @@
   let lastAdCheckTime = 0;
   let videoNormalSpeed = 1; // Track normal playback speed
   let videoWasMuted = false; // Track original mute state
+  let currentAdHandled = false; // Track if current ad is already being handled
+  let lastAdId = null; // Track last ad ID to prevent spam
 
   // Configuration
   const CONFIG = {
     checkInterval: 300, // Check every 300ms (faster response)
     skipRetryDelay: 100, // Retry skip after 100ms if failed
-    maxSkipAttempts: 10, // Max attempts to skip an ad
+    maxSkipAttempts: 5, // REDUCED from 10 to 5 (less spinning)
     userInteractionTimeout: 2000, // Consider interaction "recent" for 2 seconds
     adVerificationDelay: 50, // Reduced wait time for verification
     sponsoredCheckInterval: 1000 // Check for sponsored content every second
@@ -92,6 +94,18 @@
   }
 
   /**
+   * Generate a unique ad ID based on video source and timestamp
+   */
+  function generateAdId(video) {
+    if (!video || !video.src) return 'unknown';
+    // Use video src + current time to create unique ID
+    // This helps differentiate between multiple ads in sequence
+    const srcHash = video.src.substring(0, 50); // First 50 chars
+    const timeSlot = Math.floor(video.currentTime / 10); // Group by 10 second blocks
+    return `${srcHash}_${timeSlot}`;
+  }
+
+  /**
    * Comprehensive ad detection with multiple verification methods
    * IMPROVED: Lowered threshold to reduce false negatives
    */
@@ -113,6 +127,8 @@
     if (currentUrl !== lastVideoUrl && lastVideoUrl !== '') {
       lastVideoUrl = currentUrl;
       skipAttempts.clear();
+      currentAdHandled = false;
+      lastAdId = null;
       return false;
     }
     lastVideoUrl = currentUrl;
@@ -159,12 +175,14 @@
       detectionChecks.suspiciousVideoSrc = srcAdIndicators >= 1;
     }
 
-    // Log detection results for debugging
+    // Log detection results for debugging (only if not already handled)
     const positiveChecks = Object.entries(detectionChecks)
       .filter(([key, value]) => value)
       .map(([key]) => key);
 
-    if (positiveChecks.length > 0) {
+    // IMPROVED: Only log if we haven't already handled this ad
+    const currentAdId = generateAdId(video);
+    if (positiveChecks.length > 0 && currentAdId !== lastAdId) {
       log('Ad detection positive checks:', positiveChecks);
     }
 
@@ -182,7 +200,9 @@
                          playerText.includes('skip in');
       
       if (hasAdLabel) {
-        log('Ad confirmed by text label');
+        if (currentAdId !== lastAdId) {
+          log('Ad confirmed by text label');
+        }
         return true;
       }
     }
@@ -191,7 +211,9 @@
     if (!isAd && video.classList.length > 0) {
       const videoClasses = Array.from(video.classList).join(' ').toLowerCase();
       if (videoClasses.includes('ad') || videoClasses.includes('advertisement')) {
-        log('Ad detected via video element class');
+        if (currentAdId !== lastAdId) {
+          log('Ad detected via video element class');
+        }
         return true;
       }
     }
@@ -210,8 +232,6 @@
     // Re-check if it's still an ad
     if (isAdPlaying()) {
       skipAd();
-    } else {
-      log('Verification failed - not an ad, skipping skip attempt');
     }
   }
 
@@ -238,7 +258,7 @@
 
   /**
    * Attempts to skip the current ad
-   * IMPROVED: Better state restoration and more aggressive skipping
+   * IMPROVED: Better ad ID tracking and spam prevention
    */
   function skipAd() {
     const video = document.querySelector(SELECTORS.video);
@@ -246,25 +266,39 @@
 
     // SAFETY CHECK: Verify we're actually on an ad
     if (!isAdPlaying()) {
-      log('Skip cancelled - not an ad');
       restoreVideoState(video);
+      currentAdHandled = false;
+      lastAdId = null;
       return false;
     }
 
     let skipped = false;
-    const adId = video.src || 'unknown';
+    const adId = generateAdId(video);
 
-    // Track skip attempts
-    if (!skipAttempts.has(adId)) {
+    // IMPROVED: Check if this is a new ad
+    if (adId !== lastAdId) {
+      // New ad detected, reset tracking
+      lastAdId = adId;
+      currentAdHandled = false;
       skipAttempts.set(adId, 0);
       // Store normal playback state
       videoNormalSpeed = video.playbackRate;
       videoWasMuted = video.muted;
     }
-    const attempts = skipAttempts.get(adId);
+
+    // IMPROVED: If already handled (muted + accelerated), don't keep trying
+    if (currentAdHandled) {
+      return false; // Silently return, ad is being handled
+    }
+
+    const attempts = skipAttempts.get(adId) || 0;
 
     if (attempts >= CONFIG.maxSkipAttempts) {
-      log('Max skip attempts reached for this ad');
+      // Mark as handled to stop spam
+      if (!currentAdHandled) {
+        log(`Max skip attempts reached - ad is muted and accelerated, waiting for it to finish`);
+        currentAdHandled = true;
+      }
       return false;
     }
 
@@ -282,7 +316,9 @@
           log('Clicked skip button');
           skipped = true;
           restoreVideoState(video);
-          skipAttempts.delete(adId); // Clear attempts after successful skip
+          skipAttempts.delete(adId);
+          currentAdHandled = false;
+          lastAdId = null;
           return true;
         } catch (e) {
           log('Error clicking skip button:', e);
@@ -292,7 +328,7 @@
 
     // Method 2: Fast-forward to end of ad (IMPROVED with better duration check)
     if (video.duration && video.duration > 0 && video.duration < 600 && isFinite(video.duration)) {
-      // Ads are typically under 10 minutes (600 seconds) - increased from 300
+      // Ads are typically under 10 minutes (600 seconds)
       try {
         const previousTime = video.currentTime;
         
@@ -303,13 +339,21 @@
           log(`Fast-forwarded ad from ${previousTime.toFixed(1)}s to ${video.currentTime.toFixed(1)}s`);
           skipped = true;
           
-          // Wait a moment then restore state
+          // Mark as handled immediately after successful fast-forward
+          currentAdHandled = true;
+          
+          // Wait a moment then check if ad finished
           setTimeout(() => {
             if (!isAdPlaying()) {
               restoreVideoState(video);
               skipAttempts.delete(adId);
+              currentAdHandled = false;
+              lastAdId = null;
             }
           }, 500);
+          
+          skipAttempts.set(adId, attempts + 1);
+          return true;
         }
       } catch (e) {
         log('Error fast-forwarding ad:', e);
@@ -317,7 +361,7 @@
     }
 
     // Method 3: Mute and speed up (most reliable method)
-    if (!skipped || attempts > 2) {
+    if (!skipped || attempts > 1) {
       try {
         if (!video.muted) {
           video.muted = true;
@@ -329,11 +373,18 @@
         }
         skipped = true;
         
+        // Mark as handled after muting and accelerating
+        if (attempts >= 2) {
+          currentAdHandled = true;
+        }
+        
         // Check if ad finished after a short time
         setTimeout(() => {
           if (!isAdPlaying()) {
             restoreVideoState(video);
             skipAttempts.delete(adId);
+            currentAdHandled = false;
+            lastAdId = null;
           }
         }, 1000);
       } catch (e) {
@@ -343,8 +394,8 @@
 
     skipAttempts.set(adId, attempts + 1);
 
-    // Retry if skip failed
-    if (!skipped && attempts < CONFIG.maxSkipAttempts) {
+    // Retry if skip failed and not yet handled
+    if (!skipped && attempts < CONFIG.maxSkipAttempts && !currentAdHandled) {
       setTimeout(() => skipAd(), CONFIG.skipRetryDelay);
     }
 
@@ -580,7 +631,7 @@
 
   /**
    * Main ad blocking routine for in-video ads
-   * IMPROVED: More aggressive checking and restoration
+   * IMPROVED: Spam prevention when ad is being handled
    */
   function blockInVideoAds() {
     if (!adBlockerActive) return;
@@ -597,23 +648,30 @@
     removeAntiAdblockPopup();
 
     // Check if ad is playing
-    if (isAdPlaying()) {
-      log('Ad detected - initiating skip sequence');
+    const adPlaying = isAdPlaying();
+    
+    if (adPlaying) {
+      // Only log and initiate if not already handled
+      if (!currentAdHandled) {
+        log('Ad detected - initiating skip sequence');
+      }
       
-      // Verify and skip with reduced delay
+      // Verify and skip (will handle spam internally)
       verifyAndSkipAd();
       
       // Remove ad elements
       removeAdElements();
     } else {
-      // Clear skip attempts when no ad is playing
-      if (skipAttempts.size > 0) {
+      // Clear skip attempts and state when no ad is playing
+      if (skipAttempts.size > 0 || currentAdHandled) {
         // Ensure video state is restored
         const video = document.querySelector(SELECTORS.video);
         if (video) {
           restoreVideoState(video);
         }
         skipAttempts.clear();
+        currentAdHandled = false;
+        lastAdId = null;
       }
     }
   }
@@ -672,7 +730,7 @@
    * Initializes the ad blocker
    */
   function initialize() {
-    log('Initializing YouTube Ad Blocker Pro - Enhanced Edition (November 2025)');
+    log('Initializing YouTube Ad Blocker Pro - Hotfix v1.2.1 (November 2025)');
 
     // Wait for page to be ready
     if (document.readyState === 'loading') {
@@ -740,7 +798,7 @@
       subtree: true
     });
 
-    log('Ad blocker initialized successfully - All features active (November 2025 build)');
+    log('Ad blocker initialized successfully - Hotfix v1.2.1 active');
   }
 
   // Message listener for commands from popup
