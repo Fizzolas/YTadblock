@@ -22,13 +22,46 @@
       </div>
 
       <div class="stats-section">
-        <div class="stat-card">
-          <div class="stat-value" id="adsBlocked">0</div>
-          <div class="stat-label">Ads Blocked</div>
+        <div class="stats-header">
+          <h3>Lifetime Stats</h3>
         </div>
-        <div class="stat-card">
-          <div class="stat-value" id="timeRunning">0d</div>
-          <div class="stat-label">Days Running</div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="adsBlocked">0</div>
+            <div class="stat-label">Video Ads Blocked</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="sponsoredBlocked">0</div>
+            <div class="stat-label">Sponsored Content</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="popupsRemoved">0</div>
+            <div class="stat-label">Popups Removed</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="timeRunning">0d</div>
+            <div class="stat-label">Days Active</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-section session-stats">
+        <div class="stats-header">
+          <h3>This Session</h3>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card small">
+            <div class="stat-value" id="sessionAdsBlocked">0</div>
+            <div class="stat-label">Video Ads</div>
+          </div>
+          <div class="stat-card small">
+            <div class="stat-value" id="sessionSponsoredBlocked">0</div>
+            <div class="stat-label">Sponsored</div>
+          </div>
+          <div class="stat-card small">
+            <div class="stat-value" id="sessionPopupsRemoved">0</div>
+            <div class="stat-label">Popups</div>
+          </div>
         </div>
       </div>
 
@@ -43,13 +76,13 @@
           ✓ Blocks all YouTube ads<br>
           ✓ Auto-skips when possible<br>
           ✓ Removes anti-adblock popups<br>
-          ✓ No manual intervention needed
+          ✓ Removes sponsored content
         </p>
       </div>
     </main>
 
     <footer>
-      <p class="version">v1.0.0</p>
+      <p class="version">v1.2.1</p>
     </footer>
   </div>
   <script src="popup.js"></script>

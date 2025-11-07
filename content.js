@@ -16,6 +16,9 @@
   let videoWasMuted = false; // Track original mute state
   let currentAdHandled = false; // Track if current ad is already being handled
   let lastAdId = null; // Track last ad ID to prevent spam
+  let adsBlockedThisSession = 0; // Track ads blocked in current session
+  let sponsoredBlockedThisSession = 0; // Track sponsored content blocked
+  let popupsRemovedThisSession = 0; // Track popups removed
 
   // Configuration
   const CONFIG = {
@@ -79,6 +82,35 @@
   function log(message, data = null) {
     const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
     console.log(`[YT AdBlock ${timestamp}]`, message, data || '');
+  }
+
+  /**
+   * Report ad blocked to background script
+   */
+  function reportAdBlocked() {
+    adsBlockedThisSession++;
+    chrome.runtime.sendMessage({ action: 'adBlocked' }).catch(() => {
+      // Silently fail if background script unavailable
+    });
+  }
+
+  /**
+   * Report sponsored content blocked
+   */
+  function reportSponsoredBlocked(count) {
+    sponsoredBlockedThisSession += count;
+    chrome.runtime.sendMessage({ 
+      action: 'sponsoredBlocked', 
+      count: count 
+    }).catch(() => {});
+  }
+
+  /**
+   * Report popup removed
+   */
+  function reportPopupRemoved() {
+    popupsRemovedThisSession++;
+    chrome.runtime.sendMessage({ action: 'popupRemoved' }).catch(() => {});
   }
 
   /**
@@ -258,7 +290,7 @@
 
   /**
    * Attempts to skip the current ad
-   * IMPROVED: Better ad ID tracking and spam prevention
+   * IMPROVED: Better ad ID tracking, spam prevention, and stat reporting
    */
   function skipAd() {
     const video = document.querySelector(SELECTORS.video);
@@ -274,6 +306,7 @@
 
     let skipped = false;
     const adId = generateAdId(video);
+    let isNewAd = false;
 
     // IMPROVED: Check if this is a new ad
     if (adId !== lastAdId) {
@@ -281,6 +314,7 @@
       lastAdId = adId;
       currentAdHandled = false;
       skipAttempts.set(adId, 0);
+      isNewAd = true;
       // Store normal playback state
       videoNormalSpeed = video.playbackRate;
       videoWasMuted = video.muted;
@@ -298,6 +332,10 @@
       if (!currentAdHandled) {
         log(`Max skip attempts reached - ad is muted and accelerated, waiting for it to finish`);
         currentAdHandled = true;
+        // Report ad blocked when we give up and let it play at 16x
+        if (isNewAd) {
+          reportAdBlocked();
+        }
       }
       return false;
     }
@@ -319,6 +357,10 @@
           skipAttempts.delete(adId);
           currentAdHandled = false;
           lastAdId = null;
+          // Report successful skip
+          if (isNewAd) {
+            reportAdBlocked();
+          }
           return true;
         } catch (e) {
           log('Error clicking skip button:', e);
@@ -341,6 +383,11 @@
           
           // Mark as handled immediately after successful fast-forward
           currentAdHandled = true;
+          
+          // Report ad blocked
+          if (isNewAd) {
+            reportAdBlocked();
+          }
           
           // Wait a moment then check if ad finished
           setTimeout(() => {
@@ -376,6 +423,10 @@
         // Mark as handled after muting and accelerating
         if (attempts >= 2) {
           currentAdHandled = true;
+          // Report ad blocked when we've successfully muted + accelerated
+          if (isNewAd) {
+            reportAdBlocked();
+          }
         }
         
         // Check if ad finished after a short time
@@ -457,7 +508,7 @@
 
   /**
    * Removes sponsored content from homepage and feed
-   * IMPROVED: Added more selectors and better detection
+   * IMPROVED: Added more selectors, better detection, and stat reporting
    */
   function removeSponsoredContent() {
     let removed = 0;
@@ -526,6 +577,8 @@
 
     if (removed > 0) {
       log(`Removed ${removed} sponsored content items`);
+      // Report sponsored content blocked
+      reportSponsoredBlocked(removed);
     }
 
     return removed > 0;
@@ -533,7 +586,7 @@
 
   /**
    * Removes anti-adblock enforcement popups
-   * IMPROVED: More thorough popup detection and removal
+   * IMPROVED: More thorough popup detection, removal, and stat reporting
    */
   function removeAntiAdblockPopup() {
     let removed = false;
@@ -607,6 +660,11 @@
     if (removed && document.body.style.overflow === 'hidden') {
       document.body.style.overflow = 'auto';
       log('Restored body scroll');
+    }
+
+    // Report popup removed
+    if (removed) {
+      reportPopupRemoved();
     }
 
     // Resume video if it was playing and popup removal caused pause
@@ -809,6 +867,12 @@
       adBlockerActive = !adBlockerActive;
       log('Ad blocker toggled:', adBlockerActive);
       sendResponse({ active: adBlockerActive });
+    } else if (request.action === 'getSessionStats') {
+      sendResponse({
+        adsBlocked: adsBlockedThisSession,
+        sponsoredBlocked: sponsoredBlockedThisSession,
+        popupsRemoved: popupsRemovedThisSession
+      });
     }
     return true;
   });
