@@ -2,88 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YouTube Ad Blocker Pro</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>YT Ad Blocker</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>YouTube Ad Blocker Pro</h1>
-      <p class="subtitle">Blocking ads seamlessly</p>
-    </header>
-
-    <main>
-      <div class="status-section">
-        <div class="status-indicator">
-          <div class="status-dot" id="statusDot"></div>
-          <span class="status-text" id="statusText">Active</span>
-        </div>
+  <div id="popup-root">
+    <div class="status-row">
+      <span id="statusDot" class="dot"></span>
+      <span id="statusText" class="statustxt">Active</span>
+      <span class="v">v1.2.2-dev</span>
+    </div>
+    <div class="mainstats-row">
+      <div>
+        <div id="adsBlocked" class="mainstat">0</div>
+        <div class="statlbl">Video Ads</div>
       </div>
-
-      <div class="stats-section">
-        <div class="stats-header">
-          <h3>Lifetime Stats</h3>
-        </div>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-value" id="adsBlocked">0</div>
-            <div class="stat-label">Video Ads Blocked</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="sponsoredBlocked">0</div>
-            <div class="stat-label">Sponsored Content</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="popupsRemoved">0</div>
-            <div class="stat-label">Popups Removed</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="timeRunning">0d</div>
-            <div class="stat-label">Days Active</div>
-          </div>
-        </div>
+      <div>
+        <div id="sponsoredBlocked" class="mainstat">0</div>
+        <div class="statlbl">Sponsored</div>
       </div>
-
-      <div class="stats-section session-stats">
-        <div class="stats-header">
-          <h3>This Session</h3>
-        </div>
-        <div class="stats-grid">
-          <div class="stat-card small">
-            <div class="stat-value" id="sessionAdsBlocked">0</div>
-            <div class="stat-label">Video Ads</div>
-          </div>
-          <div class="stat-card small">
-            <div class="stat-value" id="sessionSponsoredBlocked">0</div>
-            <div class="stat-label">Sponsored</div>
-          </div>
-          <div class="stat-card small">
-            <div class="stat-value" id="sessionPopupsRemoved">0</div>
-            <div class="stat-label">Popups</div>
-          </div>
-        </div>
+      <div>
+        <div id="popupsRemoved" class="mainstat">0</div>
+        <div class="statlbl">Popups</div>
       </div>
-
-      <div class="controls-section">
-        <button class="btn btn-primary" id="toggleBtn">
-          <span id="toggleText">Disable</span>
-        </button>
+      <div>
+        <div id="timeRunning" class="mainstat">0d</div>
+        <div class="statlbl">Days</div>
       </div>
-
-      <div class="info-section">
-        <p class="info-text">
-          ✓ Blocks all YouTube ads<br>
-          ✓ Auto-skips when possible<br>
-          ✓ Removes anti-adblock popups<br>
-          ✓ Removes sponsored content
-        </p>
-      </div>
-    </main>
-
-    <footer>
-      <p class="version">v1.2.1</p>
-    </footer>
+    </div>
+    <div class="session-row">
+      <div>Session:</div>
+      <span id="sessionAdsBlocked">0</span>
+      <span id="sessionSponsoredBlocked">0</span>
+      <span id="sessionPopupsRemoved">0</span>
+    </div>
+    <button id="toggleBtn"><span id="toggleText">Disable</span></button>
+    <div class="desc">Blocks YouTube ads & popups automatically.<br/>Lightweight. No setup needed.</div>
   </div>
   <script src="popup.js"></script>
 </body>
