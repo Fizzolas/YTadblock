@@ -1,10 +1,13 @@
 // YouTube Ad Blocker Pro - Background Service Worker v1.5.0
 // Handles statistics tracking and service worker lifecycle
 
+/**
+ * Handle extension installation and updates
+ */
 chrome.runtime.onInstalled.addListener((details) => {
   try {
     if (details.reason === 'install') {
-      console.log('[YT AdBlock] Extension installed');
+      console.log('[YT AdBlock Pro] Extension installed');
       
       chrome.storage.local.set({
         enabled: true,
@@ -12,10 +15,11 @@ chrome.runtime.onInstalled.addListener((details) => {
         sponsoredBlocked: 0,
         popupsRemoved: 0,
         installDate: Date.now()
-      }).catch(err => console.error('[YT AdBlock] Storage error:', err));
+      }).catch(err => console.error('[YT AdBlock Pro] Storage error:', err));
       
     } else if (details.reason === 'update') {
-      console.log('[YT AdBlock] Updated to v' + chrome.runtime.getManifest().version);
+      const version = chrome.runtime.getManifest().version;
+      console.log(`[YT AdBlock Pro] Updated to v${version}`);
       
       // Ensure all stat fields exist
       chrome.storage.local.get(['sponsoredBlocked', 'popupsRemoved', 'installDate'], (result) => {
@@ -27,28 +31,36 @@ chrome.runtime.onInstalled.addListener((details) => {
         
         if (Object.keys(updates).length > 0) {
           chrome.storage.local.set(updates).catch(err => 
-            console.error('[YT AdBlock] Update error:', err)
+            console.error('[YT AdBlock Pro] Update error:', err)
           );
         }
       });
     }
   } catch (error) {
-    console.error('[YT AdBlock] Install error:', error);
+    console.error('[YT AdBlock Pro] Install error:', error);
   }
 });
 
+/**
+ * Update a statistic counter in storage
+ * @param {string} key - Storage key to update
+ * @param {number} increment - Amount to increment by
+ */
+function updateStat(key, increment = 1) {
+  chrome.storage.local.get([key], (result) => {
+    const count = (result[key] || 0) + increment;
+    chrome.storage.local.set({ [key]: count }).catch(err => 
+      console.error(`[YT AdBlock Pro] Error updating ${key}:`, err)
+    );
+  });
+}
+
+/**
+ * Handle messages from content scripts
+ */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   try {
     if (!request?.action) return false;
-    
-    const updateStat = (key, increment = 1) => {
-      chrome.storage.local.get([key], (result) => {
-        const count = (result[key] || 0) + increment;
-        chrome.storage.local.set({ [key]: count }).catch(err => 
-          console.error(`[YT AdBlock] Error updating ${key}:`, err)
-        );
-      });
-    };
     
     switch (request.action) {
       case 'adBlocked':
@@ -60,34 +72,46 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       case 'popupRemoved':
         updateStat('popupsRemoved');
         break;
+      default:
+        console.warn(`[YT AdBlock Pro] Unknown action: ${request.action}`);
     }
   } catch (error) {
-    console.error('[YT AdBlock] Message error:', error);
+    console.error('[YT AdBlock Pro] Message error:', error);
   }
   
   return true;
 });
 
+/**
+ * Handle service worker startup
+ */
 chrome.runtime.onStartup.addListener(() => {
-  console.log('[YT AdBlock] Service worker started');
+  console.log('[YT AdBlock Pro] Service worker started');
 });
 
-// Keep service worker alive with optimized interval
+/**
+ * Keep service worker alive with optimal interval (30s minimum recommended)
+ * This prevents the service worker from being terminated during active use
+ */
 setInterval(() => {
-  chrome.storage.local.get(['adsBlocked'], () => {});
-}, 25000);
+  chrome.storage.local.get(['adsBlocked'], () => {
+    // Simple storage access keeps worker alive
+  });
+}, 30000);
 
-// Service worker error handling
+/**
+ * Service worker error handling
+ */
 if (typeof self !== 'undefined') {
   self.addEventListener('activate', () => {
-    console.log('[YT AdBlock] Worker activated');
+    console.log('[YT AdBlock Pro] Service worker activated');
   });
   
   self.addEventListener('error', (event) => {
-    console.error('[YT AdBlock] Worker error:', event.error);
+    console.error('[YT AdBlock Pro] Worker error:', event.error);
   });
   
   self.addEventListener('unhandledrejection', (event) => {
-    console.error('[YT AdBlock] Unhandled rejection:', event.reason);
+    console.error('[YT AdBlock Pro] Unhandled rejection:', event.reason);
   });
 }
