@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Ad Blocker Pro",
-  "version": "1.4.0",
-  "description": "Blocks YouTube video ads, skips automatically, removes sponsored content and anti-adblock popups. Fast, lightweight, respects user controls.",
+  "version": "1.5.0",
+  "description": "Blocks YouTube ads, skips automatically, removes sponsored content and anti-adblock popups. Fast, lightweight, respects user controls.",
   "permissions": [
     "storage"
   ],
