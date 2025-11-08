@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "YouTube Ad Blocker Pro",
-  "version": "1.2.1",
-  "description": "Blocks YouTube ads, removes sponsored content, auto-skips when possible, and removes anti-adblock popups",
+  "version": "1.3.0",
+  "description": "Advanced YouTube ad blocker with SSAI handling, 16x acceleration, automatic skipping, sponsored content removal, and anti-adblock popup elimination",
   "permissions": [
     "storage"
   ],
   "host_permissions": [
-    "*://*.youtube.com/*"
+    "*://*.youtube.com/*",
+    "*://*.googlevideo.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -32,5 +33,11 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*.png"],
+      "matches": ["*://*.youtube.com/*"]
+    }
+  ]
 }
