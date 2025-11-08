@@ -1,5 +1,5 @@
-// YouTube Ad Blocker Pro - Bug Fix Release
-// Version 1.3.1 - November 2025
+// YouTube Ad Blocker Pro - Production Release
+// Version 1.3.2 - November 2025
 // CRITICAL: Never interfere with user actions, precise ad detection only
 
 (function() {
@@ -9,11 +9,13 @@
   // CONFIGURATION
   // ============================================
   const CONFIG = {
-    checkInterval: 500,           // Slower checks to reduce false positives
-    skipRetryDelay: 200,          // Give more time between attempts
-    maxSkipAttempts: 3,           // Fewer attempts, then stop
+    checkInterval: 500,
+    skipRetryDelay: 300,
+    maxSkipAttempts: 3,
     sponsoredCheckInterval: 2000,
     popupCheckInterval: 1000,
+    userInteractionWindow: 3000,
+    adCooldownPeriod: 5000,
     debug: false
   };
 
@@ -29,14 +31,17 @@
     userPausedVideo: false,
     userChangedSpeed: false,
     lastUserInteraction: 0,
+    userWasWatching: true,
     
     // Video state preservation
     originalPlaybackRate: 1,
     originalMuted: false,
+    originalVolume: 1,
     
     // Ad tracking
     processingAd: false,
     skipAttempts: 0,
+    currentAdId: null,
     
     // Session statistics
     sessionStats: {
@@ -49,6 +54,11 @@
       adCheck: null,
       sponsoredCheck: null,
       popupCheck: null
+    },
+    
+    observers: {
+      mutation: null,
+      video: null
     }
   };
 
@@ -58,17 +68,35 @@
   
   function log(...args) {
     if (CONFIG.debug) {
-      console.log('[YT AdBlock Fix]', ...args);
+      console.log('[YT AdBlock Pro]', ...args);
+    }
+  }
+
+  function safeLog(message, error) {
+    if (CONFIG.debug && error) {
+      console.error('[YT AdBlock Pro Error]', message, error);
+    } else if (CONFIG.debug) {
+      console.log('[YT AdBlock Pro]', message);
     }
   }
 
   function getVideo() {
-    return document.querySelector('video.html5-main-video');
+    try {
+      return document.querySelector('video.html5-main-video');
+    } catch (e) {
+      safeLog('Error getting video element', e);
+      return null;
+    }
   }
 
   function getCurrentVideoId() {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('v');
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('v');
+    } catch (e) {
+      safeLog('Error getting video ID', e);
+      return null;
+    }
   }
 
   // ============================================
@@ -77,50 +105,78 @@
   
   function setupUserInteractionListeners() {
     const video = getVideo();
-    if (!video) return;
+    if (!video) {
+      setTimeout(setupUserInteractionListeners, 1000);
+      return;
+    }
     
-    // Track pause button clicks
+    // Track all click events
     document.addEventListener('click', (e) => {
-      const target = e.target;
-      // Check if clicking play/pause button or video itself
-      if (target.closest('.ytp-play-button') || 
-          target.classList.contains('html5-main-video')) {
-        state.lastUserInteraction = Date.now();
-        state.userPausedVideo = video.paused;
-        log('User interaction detected: pause/play');
+      try {
+        const target = e.target;
+        if (target.closest('.ytp-play-button') || 
+            target.classList.contains('html5-main-video') ||
+            target.closest('.ytp-chrome-controls')) {
+          state.lastUserInteraction = Date.now();
+          state.userPausedVideo = video.paused;
+          log('User clicked controls');
+        }
+      } catch (err) {
+        safeLog('Error in click handler', err);
       }
     }, true);
     
     // Track keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-      // Space, K = play/pause
-      if (e.code === 'Space' || e.code === 'KeyK') {
-        state.lastUserInteraction = Date.now();
-        state.userPausedVideo = !video.paused; // Will be opposite after keypress
-        log('User interaction detected: keyboard');
-      }
-      // Shift+< or Shift+> = speed change
-      if ((e.code === 'Comma' || e.code === 'Period') && e.shiftKey) {
-        state.userChangedSpeed = true;
-        state.lastUserInteraction = Date.now();
-        log('User changed playback speed');
+      try {
+        if (e.code === 'Space' || e.code === 'KeyK') {
+          state.lastUserInteraction = Date.now();
+          state.userPausedVideo = !video.paused;
+          log('User keyboard: pause/play');
+        }
+        if ((e.code === 'Comma' || e.code === 'Period') && e.shiftKey) {
+          state.userChangedSpeed = true;
+          state.lastUserInteraction = Date.now();
+          log('User changed speed via keyboard');
+        }
+        // Number keys (0-9) for seeking
+        if (e.code.match(/Digit[0-9]|Numpad[0-9]/)) {
+          state.lastUserInteraction = Date.now();
+          log('User seeked with number key');
+        }
+        // Arrow keys
+        if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+          state.lastUserInteraction = Date.now();
+          log('User seeked with arrow');
+        }
+      } catch (err) {
+        safeLog('Error in keyboard handler', err);
       }
     }, true);
     
-    // Track direct video property changes by user
-    let userChangingSpeed = false;
-    const speedButtons = document.querySelectorAll('.ytp-settings-button, .ytp-menuitem');
-    speedButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        userChangingSpeed = true;
-        setTimeout(() => { userChangingSpeed = false; }, 500);
-      });
-    });
+    // Monitor settings menu interactions
+    const setupMutationObserver = () => {
+      const settingsMenu = document.querySelector('.ytp-settings-menu');
+      if (settingsMenu && !state.observers.mutation) {
+        state.observers.mutation = new MutationObserver(() => {
+          state.lastUserInteraction = Date.now();
+          state.userChangedSpeed = true;
+          log('Settings menu interaction detected');
+        });
+        state.observers.mutation.observe(settingsMenu, {
+          attributes: true,
+          childList: true,
+          subtree: true
+        });
+      }
+    };
+    
+    setupMutationObserver();
+    setInterval(setupMutationObserver, 5000);
   }
 
-  // Check if user recently interacted (within 3 seconds)
   function userRecentlyInteracted() {
-    return (Date.now() - state.lastUserInteraction) < 3000;
+    return (Date.now() - state.lastUserInteraction) < CONFIG.userInteractionWindow;
   }
 
   // ============================================
@@ -128,92 +184,145 @@
   // ============================================
   
   const AD_SELECTORS = {
-    // VERY specific ad indicators only
     containers: [
       '.video-ads.ytp-ad-module',
       'div.ad-showing',
       '.ytp-ad-player-overlay',
+      '.ytp-ad-player-overlay-instream-info'
     ],
     
     skipButtons: [
       'button.ytp-ad-skip-button',
       'button.ytp-ad-skip-button-modern',
-      '.ytp-ad-skip-button-container button'
+      '.ytp-ad-skip-button-container button',
+      'button.ytp-skip-ad-button'
     ],
     
     badges: [
       '.ytp-ad-text',
-      '.ytp-ad-preview-text'
+      '.ytp-ad-preview-text',
+      '.ytp-ad-simple-ad-badge',
+      'div.ytp-ad-message-container'
+    ],
+    
+    overlays: [
+      '.ytp-ad-overlay-container',
+      '.ytp-ad-action-interstitial-slot'
     ]
   };
+
+  function isElementVisible(element) {
+    if (!element || !element.offsetParent) return false;
+    
+    try {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      
+      return rect.width > 0 && 
+             rect.height > 0 && 
+             style.display !== 'none' && 
+             style.visibility !== 'hidden' &&
+             style.opacity !== '0';
+    } catch (e) {
+      return false;
+    }
+  }
 
   function isAdPlaying(video) {
     if (!video) return false;
 
     // CRITICAL: If user recently interacted, don't interfere
     if (userRecentlyInteracted()) {
-      log('User recently interacted - skipping ad detection');
+      log('User recently interacted - skipping detection');
       return false;
     }
 
-    // CRITICAL: If we just finished an ad, wait 5 seconds before detecting again
-    if (state.lastAdEndTime && (Date.now() - state.lastAdEndTime) < 5000) {
+    // CRITICAL: Cooldown period after ad ends
+    if (state.lastAdEndTime && (Date.now() - state.lastAdEndTime) < CONFIG.adCooldownPeriod) {
       return false;
     }
 
     let strongIndicators = 0;
+    let adDetails = [];
     
-    // Check 1: Ad container (STRONG)
-    for (const selector of AD_SELECTORS.containers) {
-      const element = document.querySelector(selector);
-      if (element && element.offsetParent !== null) { // Must be visible
-        strongIndicators++;
-        log('Strong indicator: container', selector);
+    try {
+      // Check 1: Ad container visible (STRONG)
+      for (const selector of AD_SELECTORS.containers) {
+        const element = document.querySelector(selector);
+        if (isElementVisible(element)) {
+          strongIndicators++;
+          adDetails.push(`container:${selector}`);
+        }
       }
-    }
-    
-    // Check 2: Player has ad-showing class (STRONG)
-    const playerContainer = document.querySelector('.html5-video-player');
-    if (playerContainer && playerContainer.classList.contains('ad-showing')) {
-      strongIndicators++;
-      log('Strong indicator: ad-showing class');
-    }
-    
-    // Check 3: Skip button exists (VERY STRONG)
-    for (const selector of AD_SELECTORS.skipButtons) {
-      const skipBtn = document.querySelector(selector);
-      if (skipBtn && skipBtn.offsetParent !== null) {
-        strongIndicators += 2; // Very strong indicator
-        log('Very strong indicator: skip button visible');
+      
+      // Check 2: Player has ad-showing class (VERY STRONG)
+      const playerContainer = document.querySelector('.html5-video-player');
+      if (playerContainer?.classList.contains('ad-showing')) {
+        strongIndicators += 2;
+        adDetails.push('ad-showing-class');
       }
-    }
-    
-    // Check 4: Ad badge visible (STRONG)
-    for (const selector of AD_SELECTORS.badges) {
-      const badge = document.querySelector(selector);
-      if (badge && badge.offsetParent !== null && badge.textContent.toLowerCase().includes('ad')) {
-        strongIndicators++;
-        log('Strong indicator: ad badge');
+      
+      // Check 3: Skip button exists and visible (VERY STRONG)
+      for (const selector of AD_SELECTORS.skipButtons) {
+        const skipBtn = document.querySelector(selector);
+        if (isElementVisible(skipBtn)) {
+          strongIndicators += 2;
+          adDetails.push(`skip-button:${selector}`);
+        }
       }
+      
+      // Check 4: Ad badge visible with "ad" text (STRONG)
+      for (const selector of AD_SELECTORS.badges) {
+        const badge = document.querySelector(selector);
+        if (isElementVisible(badge)) {
+          const text = badge.textContent?.toLowerCase() || '';
+          if (text.includes('ad') || text.includes('advertisement')) {
+            strongIndicators++;
+            adDetails.push(`badge:${text.substring(0, 20)}`);
+          }
+        }
+      }
+      
+      // Check 5: Ad overlay visible (MODERATE)
+      for (const selector of AD_SELECTORS.overlays) {
+        const overlay = document.querySelector(selector);
+        if (isElementVisible(overlay)) {
+          strongIndicators++;
+          adDetails.push(`overlay:${selector}`);
+        }
+      }
+      
+      // Check 6: Video duration is suspiciously short (ad-like)
+      if (video.duration > 0 && video.duration < 120) {
+        const videoTime = document.querySelector('.ytp-time-duration');
+        if (videoTime && videoTime.textContent) {
+          strongIndicators++;
+          adDetails.push(`short-duration:${video.duration}s`);
+        }
+      }
+
+    } catch (e) {
+      safeLog('Error during ad detection', e);
+      return false;
     }
 
-    // CRITICAL: Require 2+ strong indicators to confirm ad
+    // CRITICAL: Require 2+ strong indicators
     const isAd = strongIndicators >= 2;
     
-    // SAFETY CHECK: If video is paused and user recently paused it, NOT an ad
+    // SAFETY CHECK: User paused video
     if (isAd && video.paused && state.userPausedVideo && userRecentlyInteracted()) {
-      log('False positive: user paused video');
+      log('False positive: user paused');
       return false;
     }
     
-    // SAFETY CHECK: If playback rate is user-set, NOT an ad
-    if (isAd && state.userChangedSpeed && video.playbackRate !== 16) {
-      log('False positive: user changed speed');
+    // SAFETY CHECK: User changed speed
+    if (isAd && state.userChangedSpeed && video.playbackRate !== 16 && userRecentlyInteracted()) {
+      log('False positive: user speed change');
       return false;
     }
     
     if (isAd) {
-      log(`Ad detected with ${strongIndicators} strong indicators`);
+      log(`Ad detected! Indicators: ${strongIndicators}, Details: ${adDetails.join(', ')}`);
     }
     
     return isAd;
@@ -224,13 +333,21 @@
   // ============================================
   
   function saveVideoState(video) {
-    if (!video) return;
+    if (!video || state.processingAd) return;
     
-    // Only save if not already manipulated
-    if (!state.processingAd) {
-      state.originalPlaybackRate = video.playbackRate;
-      state.originalMuted = video.muted;
-      log('Saved state:', { rate: state.originalPlaybackRate, muted: state.originalMuted });
+    try {
+      state.originalPlaybackRate = video.playbackRate || 1;
+      state.originalMuted = video.muted || false;
+      state.originalVolume = video.volume || 1;
+      state.userWasWatching = !video.paused;
+      log('State saved:', {
+        rate: state.originalPlaybackRate,
+        muted: state.originalMuted,
+        volume: state.originalVolume,
+        watching: state.userWasWatching
+      });
+    } catch (e) {
+      safeLog('Error saving video state', e);
     }
   }
 
@@ -238,25 +355,31 @@
     if (!video || !state.processingAd) return;
     
     try {
-      // CRITICAL: Don't restore if user changed settings during ad
+      // Don't restore if user changed settings during ad
       if (!userRecentlyInteracted()) {
         if (video.playbackRate !== state.originalPlaybackRate) {
           video.playbackRate = state.originalPlaybackRate;
-          log('Restored playback rate to:', state.originalPlaybackRate);
+          log('Restored rate:', state.originalPlaybackRate);
         }
         
         if (video.muted !== state.originalMuted) {
           video.muted = state.originalMuted;
-          log('Restored mute state to:', state.originalMuted);
+          log('Restored mute:', state.originalMuted);
+        }
+        
+        if (Math.abs(video.volume - state.originalVolume) > 0.01) {
+          video.volume = state.originalVolume;
+          log('Restored volume:', state.originalVolume);
         }
       }
       
       state.processingAd = false;
       state.skipAttempts = 0;
+      state.currentAdId = null;
       state.lastAdEndTime = Date.now();
       
     } catch (error) {
-      log('Error restoring state:', error);
+      safeLog('Error restoring state', error);
     }
   }
 
@@ -264,33 +387,35 @@
   // AD SKIPPING METHODS
   // ============================================
   
-  // Method 1: Click skip button (PRIORITY)
   function tryClickSkipButton() {
-    for (const selector of AD_SELECTORS.skipButtons) {
-      const skipButton = document.querySelector(selector);
-      
-      if (skipButton && skipButton.offsetParent !== null) {
-        const rect = skipButton.getBoundingClientRect();
-        const style = window.getComputedStyle(skipButton);
+    try {
+      for (const selector of AD_SELECTORS.skipButtons) {
+        const skipButton = document.querySelector(selector);
         
-        if (rect.width > 0 && rect.height > 0 && 
-            style.display !== 'none' && 
-            style.visibility !== 'hidden') {
+        if (isElementVisible(skipButton)) {
+          // Simulate real click
+          const clickEvent = new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+          });
           
+          skipButton.dispatchEvent(clickEvent);
           skipButton.click();
           log('Skip button clicked:', selector);
           return true;
         }
       }
+    } catch (e) {
+      safeLog('Error clicking skip button', e);
     }
     return false;
   }
 
-  // Method 2: Mute and accelerate (CAREFUL)
   function accelerateAd(video) {
-    if (!video || state.processingAd === false) return false;
+    if (!video || !state.processingAd) return false;
     
-    // CRITICAL: Don't interfere if user recently changed speed
+    // Don't interfere if user recently changed speed
     if (state.userChangedSpeed && userRecentlyInteracted()) {
       log('Skipping acceleration - user changed speed');
       return false;
@@ -302,21 +427,21 @@
         log('Ad muted');
       }
       
-      // Use 10x instead of 16x for more stable playback
-      if (video.playbackRate !== 10) {
-        video.playbackRate = 10;
-        log('Ad accelerated to 10x');
+      // Use 8x for more stable playback
+      const targetSpeed = 8;
+      if (video.playbackRate !== targetSpeed) {
+        video.playbackRate = targetSpeed;
+        log(`Ad accelerated to ${targetSpeed}x`);
       }
       
       return true;
       
     } catch (error) {
-      log('Error accelerating:', error);
+      safeLog('Error accelerating ad', error);
       return false;
     }
   }
 
-  // Method 3: Fast-forward (SAFE)
   function tryFastForward(video) {
     if (!video) return false;
     
@@ -324,14 +449,14 @@
       const duration = video.duration;
       const currentTime = video.currentTime;
       
-      // SAFETY: Only fast-forward if duration is reasonable for ad
-      if (duration && duration > 0 && duration < 120 && currentTime < duration - 1) {
-        video.currentTime = duration - 0.5;
-        log('Fast-forwarded ad');
+      // Only fast-forward if duration is reasonable for ad
+      if (duration && duration > 0 && duration < 120 && currentTime < duration - 0.5) {
+        video.currentTime = Math.max(duration - 0.3, currentTime);
+        log('Fast-forwarded ad to near end');
         return true;
       }
     } catch (error) {
-      log('Error fast-forwarding:', error);
+      safeLog('Error fast-forwarding', error);
     }
     
     return false;
@@ -342,18 +467,24 @@
   // ============================================
   
   function handleAdSkip() {
+    if (!state.isActive) return;
+    
     const video = getVideo();
-    if (!video || !state.isActive) return;
+    if (!video) return;
 
     const currentVideoId = getCurrentVideoId();
     
     // Reset if video changed
     if (state.currentVideoUrl !== currentVideoId) {
+      if (state.processingAd) {
+        restoreVideoState(video);
+      }
       state.currentVideoUrl = currentVideoId;
       state.processingAd = false;
       state.skipAttempts = 0;
       state.userChangedSpeed = false;
-      log('Video changed, state reset');
+      state.currentAdId = null;
+      log('Video changed, reset state');
     }
 
     // Check if ad is playing
@@ -362,7 +493,7 @@
     // If no ad, restore state if we were processing
     if (!adPlaying) {
       if (state.processingAd) {
-        log('Ad ended, restoring state');
+        log('Ad ended, restoring...');
         restoreVideoState(video);
       }
       return;
@@ -370,48 +501,56 @@
 
     // Ad detected - start processing
     if (!state.processingAd) {
-      log('New ad detected');
+      log('=== NEW AD DETECTED ===' );
       state.processingAd = true;
       state.skipAttempts = 0;
+      state.currentAdId = Date.now();
       saveVideoState(video);
       
       state.sessionStats.adsBlocked++;
-      chrome.runtime.sendMessage({ action: 'adBlocked' }).catch(() => {});
+      
+      // Send message safely
+      try {
+        chrome.runtime.sendMessage({ action: 'adBlocked' }).catch(() => {});
+      } catch (e) {
+        // Extension context invalidated, ignore
+      }
     }
 
     // CRITICAL: Stop after max attempts
     if (state.skipAttempts >= CONFIG.maxSkipAttempts) {
-      log('Max attempts reached - waiting for ad to end naturally');
+      log('Max attempts reached - waiting for natural end');
       return;
     }
 
     state.skipAttempts++;
+    log(`Skip attempt ${state.skipAttempts}/${CONFIG.maxSkipAttempts}`);
 
-    // Priority 1: Try skip button (most reliable, least intrusive)
+    // Priority 1: Try skip button (most reliable)
     if (tryClickSkipButton()) {
-      log('Skip button attempt', state.skipAttempts);
       setTimeout(() => {
-        if (!isAdPlaying(video)) {
-          log('Skip successful');
+        const video = getVideo();
+        if (video && !isAdPlaying(video)) {
+          log('Skip successful!');
           restoreVideoState(video);
         }
       }, 500);
       return;
     }
     
-    // Priority 2: Try fast-forward (safe, doesn't change speed permanently)
+    // Priority 2: Try fast-forward
     if (tryFastForward(video)) {
-      log('Fast-forward attempt', state.skipAttempts);
       setTimeout(() => {
-        if (!isAdPlaying(video)) {
-          log('Fast-forward successful');
+        const video = getVideo();
+        if (video && !isAdPlaying(video)) {
+          log('Fast-forward successful!');
           restoreVideoState(video);
         }
       }, 500);
       return;
     }
     
-    // Priority 3: Accelerate (only if other methods failed)
+    // Priority 3: Accelerate (only after other methods failed)
     if (state.skipAttempts >= 2) {
       accelerateAd(video);
     }
@@ -427,7 +566,11 @@
     'ytd-promoted-sparkles-web-renderer',
     'ytd-promoted-video-renderer',
     'ytd-compact-promoted-video-renderer',
-    'ytd-banner-promo-renderer'
+    'ytd-banner-promo-renderer',
+    'ytd-in-feed-ad-layout-renderer',
+    'ytd-statement-banner-renderer',
+    'ytd-brand-video-shelf-renderer',
+    'ytd-brand-video-singleton-renderer'
   ];
 
   function removeSponsoredContent() {
@@ -435,23 +578,33 @@
     
     let removed = 0;
     
-    for (const selector of SPONSORED_SELECTORS) {
-      const elements = document.querySelectorAll(selector);
+    try {
+      for (const selector of SPONSORED_SELECTORS) {
+        const elements = document.querySelectorAll(selector);
+        
+        elements.forEach(el => {
+          if (el && el.parentElement && el.style.display !== 'none') {
+            el.style.setProperty('display', 'none', 'important');
+            el.remove();
+            removed++;
+          }
+        });
+      }
       
-      elements.forEach(el => {
-        if (el && el.parentElement && el.style.display !== 'none') {
-          el.style.display = 'none';
-          removed++;
+      if (removed > 0) {
+        state.sessionStats.sponsoredBlocked += removed;
+        try {
+          chrome.runtime.sendMessage({ 
+            action: 'sponsoredBlocked', 
+            count: removed 
+          }).catch(() => {});
+        } catch (e) {
+          // Extension context invalidated
         }
-      });
-    }
-    
-    if (removed > 0) {
-      state.sessionStats.sponsoredBlocked += removed;
-      chrome.runtime.sendMessage({ 
-        action: 'sponsoredBlocked', 
-        count: removed 
-      }).catch(() => {});
+        log(`Removed ${removed} sponsored items`);
+      }
+    } catch (e) {
+      safeLog('Error removing sponsored content', e);
     }
   }
 
@@ -462,14 +615,18 @@
   const POPUP_SELECTORS = [
     'tp-yt-paper-dialog',
     'ytd-enforcement-message-view-model',
-    'yt-mealbar-promo-renderer'
+    'yt-mealbar-promo-renderer',
+    'ytd-popup-container',
+    'tp-yt-paper-dialog.ytd-popup-container'
   ];
 
   const POPUP_TEXT_INDICATORS = [
     'ad blocker',
     'adblock',
     'turn off',
-    'allow ads'
+    'allow ads',
+    'disable',
+    'adblocker'
   ];
 
   function removeAntiAdblockPopups() {
@@ -477,38 +634,50 @@
     
     let removed = 0;
     
-    for (const selector of POPUP_SELECTORS) {
-      const elements = document.querySelectorAll(selector);
-      
-      elements.forEach(el => {
-        const text = el.textContent.toLowerCase();
+    try {
+      for (const selector of POPUP_SELECTORS) {
+        const elements = document.querySelectorAll(selector);
         
-        for (const indicator of POPUP_TEXT_INDICATORS) {
-          if (text.includes(indicator)) {
-            el.remove();
-            removed++;
-            log('Removed anti-adblock popup');
-            break;
+        elements.forEach(el => {
+          if (!el) return;
+          
+          const text = (el.textContent || '').toLowerCase();
+          
+          for (const indicator of POPUP_TEXT_INDICATORS) {
+            if (text.includes(indicator)) {
+              el.remove();
+              removed++;
+              log('Removed anti-adblock popup:', indicator);
+              break;
+            }
           }
-        }
-      });
-    }
-    
-    // Remove backdrops
-    const backdrops = document.querySelectorAll('tp-yt-iron-overlay-backdrop');
-    backdrops.forEach(backdrop => {
-      backdrop.remove();
-      removed++;
-    });
-    
-    if (removed > 0) {
-      state.sessionStats.popupsRemoved += removed;
-      chrome.runtime.sendMessage({ action: 'popupRemoved' }).catch(() => {});
-      
-      // Restore body scroll
-      if (document.body.style.overflow === 'hidden') {
-        document.body.style.overflow = '';
+        });
       }
+      
+      // Remove backdrops
+      const backdrops = document.querySelectorAll('tp-yt-iron-overlay-backdrop, #scrim');
+      backdrops.forEach(backdrop => {
+        backdrop.remove();
+        removed++;
+      });
+      
+      if (removed > 0) {
+        state.sessionStats.popupsRemoved += removed;
+        try {
+          chrome.runtime.sendMessage({ action: 'popupRemoved' }).catch(() => {});
+        } catch (e) {
+          // Extension context invalidated
+        }
+        
+        // Restore body scroll
+        if (document.body.style.overflow === 'hidden') {
+          document.body.style.overflow = '';
+        }
+        
+        log(`Removed ${removed} popup elements`);
+      }
+    } catch (e) {
+      safeLog('Error removing popups', e);
     }
   }
 
@@ -517,27 +686,31 @@
   // ============================================
   
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'toggle') {
-      state.isActive = !state.isActive;
-      log('Extension toggled:', state.isActive ? 'ON' : 'OFF');
-      
-      // If turning off, restore any manipulated video immediately
-      if (!state.isActive && state.processingAd) {
-        const video = getVideo();
-        if (video) {
-          video.playbackRate = state.originalPlaybackRate;
-          video.muted = state.originalMuted;
-          state.processingAd = false;
+    try {
+      if (request.action === 'toggle') {
+        state.isActive = !state.isActive;
+        log('Extension toggled:', state.isActive ? 'ON' : 'OFF');
+        
+        if (!state.isActive && state.processingAd) {
+          const video = getVideo();
+          if (video) {
+            video.playbackRate = state.originalPlaybackRate;
+            video.muted = state.originalMuted;
+            state.processingAd = false;
+          }
         }
+        
+        sendResponse({ active: state.isActive });
       }
-      
-      sendResponse({ active: state.isActive });
-    }
-    else if (request.action === 'getStatus') {
-      sendResponse({ active: state.isActive });
-    }
-    else if (request.action === 'getSessionStats') {
-      sendResponse(state.sessionStats);
+      else if (request.action === 'getStatus') {
+        sendResponse({ active: state.isActive });
+      }
+      else if (request.action === 'getSessionStats') {
+        sendResponse(state.sessionStats);
+      }
+    } catch (e) {
+      safeLog('Error handling message', e);
+      sendResponse({ error: e.message });
     }
     
     return true;
@@ -548,23 +721,64 @@
   // ============================================
   
   function init() {
-    log('YouTube Ad Blocker Pro - Bug Fix initializing...');
-    log('Version: 1.3.1 - Critical fixes applied');
+    log('='.repeat(50));
+    log('YouTube Ad Blocker Pro v1.3.2 Initializing...');
+    log('='.repeat(50));
     
-    // Setup user interaction tracking
-    setupUserInteractionListeners();
-    
-    // Start intervals
-    state.intervals.adCheck = setInterval(handleAdSkip, CONFIG.checkInterval);
-    state.intervals.sponsoredCheck = setInterval(removeSponsoredContent, CONFIG.sponsoredCheckInterval);
-    state.intervals.popupCheck = setInterval(removeAntiAdblockPopups, CONFIG.popupCheckInterval);
-    
-    // Run immediately
-    removeSponsoredContent();
-    removeAntiAdblockPopups();
-    
-    log('Initialization complete - Safe mode active');
+    try {
+      // Setup user interaction tracking
+      setupUserInteractionListeners();
+      
+      // Start intervals with error boundaries
+      state.intervals.adCheck = setInterval(() => {
+        try {
+          handleAdSkip();
+        } catch (e) {
+          safeLog('Error in ad check interval', e);
+        }
+      }, CONFIG.checkInterval);
+      
+      state.intervals.sponsoredCheck = setInterval(() => {
+        try {
+          removeSponsoredContent();
+        } catch (e) {
+          safeLog('Error in sponsored check interval', e);
+        }
+      }, CONFIG.sponsoredCheckInterval);
+      
+      state.intervals.popupCheck = setInterval(() => {
+        try {
+          removeAntiAdblockPopups();
+        } catch (e) {
+          safeLog('Error in popup check interval', e);
+        }
+      }, CONFIG.popupCheckInterval);
+      
+      // Run immediately
+      removeSponsoredContent();
+      removeAntiAdblockPopups();
+      
+      log('Initialization complete - Safe mode active');
+      log('='.repeat(50));
+    } catch (e) {
+      safeLog('Critical error during initialization', e);
+    }
   }
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    try {
+      Object.values(state.intervals).forEach(interval => {
+        if (interval) clearInterval(interval);
+      });
+      
+      if (state.observers.mutation) {
+        state.observers.mutation.disconnect();
+      }
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  });
 
   // Start when page loads
   if (document.readyState === 'loading') {
