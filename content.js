@@ -1,4 +1,4 @@
-// YouTube Ad Blocker Pro - Production v1.4.0
+// YouTube Ad Blocker Pro - Production v1.5.0
 // Optimized for performance, stability, and Chrome Web Store compliance
 
 (function() {
@@ -14,15 +14,15 @@
     sponsoredCheckInterval: 2000,
     popupCheckInterval: 1000,
     userInteractionWindow: 3000,
-    adCooldownPeriod: 4000,
+    adCooldownPeriod: 3000,
     debug: false
   };
 
   // Load debug setting
   chrome.storage.local.get(['debugMode'], (result) => {
-    if (result.debugMode) {
-      CONFIG.debug = true;
-      console.log('%c[YT AdBlock] Debug enabled', 'color: #27e057; font-weight: bold');
+    CONFIG.debug = !!result.debugMode;
+    if (CONFIG.debug) {
+      console.log('%c[YT AdBlock] Debug mode enabled', 'color: #27e057; font-weight: bold');
     }
   });
 
@@ -98,7 +98,7 @@
     try {
       chrome.runtime.sendMessage({ action, ...data }).catch(() => {});
     } catch (e) {
-      // Extension context invalidated
+      // Extension context invalidated - ignore
     }
   }
 
@@ -129,18 +129,14 @@
     // Track keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       try {
-        const interactionKeys = [
-          'Space', 'KeyK',                              // Play/pause
-          'ArrowLeft', 'ArrowRight',                    // Seek
-          'Comma', 'Period'                             // Speed (with Shift)
-        ];
+        const interactionKeys = ['Space', 'KeyK', 'ArrowLeft', 'ArrowRight', 'Comma', 'Period'];
+        const isNumberKey = /^(Digit|Numpad)[0-9]$/.test(e.code);
         
-        if (interactionKeys.includes(e.code) || 
-            /^(Digit|Numpad)[0-9]$/.test(e.code)) {    // Number keys
+        if (interactionKeys.includes(e.code) || isNumberKey) {
           state.lastUserInteraction = Date.now();
           
           if (e.code === 'Space' || e.code === 'KeyK') {
-            state.userPausedVideo = !video.paused;
+            state.userPausedVideo = video.paused;
           }
           
           if ((e.code === 'Comma' || e.code === 'Period') && e.shiftKey) {
@@ -154,14 +150,16 @@
     
     // Monitor settings menu
     const observeSettings = () => {
-      const settingsMenu = document.querySelector('.ytp-settings-menu');
-      if (settingsMenu) {
-        const observer = new MutationObserver(() => {
-          state.lastUserInteraction = Date.now();
-          state.userChangedSpeed = true;
-        });
-        observer.observe(settingsMenu, { attributes: true, childList: true, subtree: true });
-      }
+      try {
+        const settingsMenu = document.querySelector('.ytp-settings-menu');
+        if (settingsMenu) {
+          const observer = new MutationObserver(() => {
+            state.lastUserInteraction = Date.now();
+            state.userChangedSpeed = true;
+          });
+          observer.observe(settingsMenu, { attributes: true, childList: true, subtree: true });
+        }
+      } catch (e) {}
     };
     
     observeSettings();
@@ -199,6 +197,8 @@
 
   function isAdPlaying(video) {
     if (!video || userRecentlyInteracted()) return false;
+    
+    // Cooldown period after ad ends
     if (state.lastAdEndTime && (Date.now() - state.lastAdEndTime) < CONFIG.adCooldownPeriod) {
       return false;
     }
@@ -207,32 +207,35 @@
     
     try {
       // Check containers
-      AD_SELECTORS.containers.forEach(sel => {
+      for (const sel of AD_SELECTORS.containers) {
         if (isElementVisible(document.querySelector(sel))) indicators++;
-      });
+      }
       
       // Check player class
       const player = document.querySelector('.html5-video-player');
       if (player?.classList.contains('ad-showing')) indicators += 2;
       
       // Check skip buttons (strong indicator)
-      AD_SELECTORS.skipButtons.forEach(sel => {
-        if (isElementVisible(document.querySelector(sel))) indicators += 2;
-      });
+      for (const sel of AD_SELECTORS.skipButtons) {
+        if (isElementVisible(document.querySelector(sel))) {
+          indicators += 2;
+          break;
+        }
+      }
       
       // Check badges
-      AD_SELECTORS.badges.forEach(sel => {
+      for (const sel of AD_SELECTORS.badges) {
         const badge = document.querySelector(sel);
         if (isElementVisible(badge)) {
           const text = (badge.textContent || '').toLowerCase();
           if (text.includes('ad')) indicators++;
         }
-      });
+      }
       
       // Check overlays
-      AD_SELECTORS.overlays.forEach(sel => {
+      for (const sel of AD_SELECTORS.overlays) {
         if (isElementVisible(document.querySelector(sel))) indicators++;
-      });
+      }
       
       // Check short duration
       if (video.duration > 0 && video.duration < 120) {
@@ -245,17 +248,17 @@
 
     const isAd = indicators >= 2;
     
-    // Safety checks
-    if (isAd && video.paused && state.userPausedVideo && userRecentlyInteracted()) {
-      return false;
-    }
-    
-    if (isAd && state.userChangedSpeed && video.playbackRate !== 8 && userRecentlyInteracted()) {
-      return false;
-    }
-    
+    // Safety checks - don't interfere with user actions
     if (isAd) {
-      log(`🎯 Ad detected (${indicators} indicators)`);
+      if (video.paused && state.userPausedVideo && userRecentlyInteracted()) {
+        return false;
+      }
+      
+      if (state.userChangedSpeed && video.playbackRate !== 8 && userRecentlyInteracted()) {
+        return false;
+      }
+      
+      log(`Ad detected (${indicators} indicators)`);
     }
     
     return isAd;
@@ -272,7 +275,7 @@
       state.originalPlaybackRate = video.playbackRate || 1;
       state.originalMuted = video.muted || false;
       state.originalVolume = video.volume || 1;
-      log('💾 State saved:', { rate: state.originalPlaybackRate, muted: state.originalMuted });
+      log('State saved:', { rate: state.originalPlaybackRate, muted: state.originalMuted });
     } catch (e) {}
   }
 
@@ -296,7 +299,7 @@
       state.skipAttempts = 0;
       state.lastAdEndTime = Date.now();
       
-      log('✅ State restored');
+      log('State restored');
     } catch (e) {}
   }
 
@@ -315,7 +318,7 @@
             view: window
           }));
           btn.click();
-          log('⏭️  Skip button clicked');
+          log('Skip button clicked');
           return true;
         }
       }
@@ -330,12 +333,12 @@
     try {
       if (!video.muted) {
         video.muted = true;
-        log('🔇 Muted');
+        log('Muted');
       }
       
       if (video.playbackRate !== 8) {
         video.playbackRate = 8;
-        log('⚡ 8x speed');
+        log('8x speed');
       }
       
       return true;
@@ -353,7 +356,7 @@
       
       if (duration && duration > 0 && duration < 120 && currentTime < duration - 0.5) {
         video.currentTime = Math.max(duration - 0.3, currentTime);
-        log('⏩ Fast-forwarded');
+        log('Fast-forwarded');
         return true;
       }
     } catch (e) {}
@@ -382,7 +385,7 @@
       state.processingAd = false;
       state.skipAttempts = 0;
       state.userChangedSpeed = false;
-      log('🔄 Video changed');
+      log('Video changed');
     }
 
     const adPlaying = isAdPlaying(video);
@@ -390,7 +393,7 @@
     // Ad ended, restore
     if (!adPlaying) {
       if (state.processingAd) {
-        log('✅ Ad ended');
+        log('Ad ended');
         restoreVideoState(video);
       }
       return;
@@ -398,7 +401,7 @@
 
     // New ad detected
     if (!state.processingAd) {
-      log('🚨 New ad');
+      log('New ad detected');
       state.processingAd = true;
       state.skipAttempts = 0;
       saveVideoState(video);
@@ -412,7 +415,7 @@
     }
 
     state.skipAttempts++;
-    log(`🎯 Attempt ${state.skipAttempts}/${CONFIG.maxSkipAttempts}`);
+    log(`Attempt ${state.skipAttempts}/${CONFIG.maxSkipAttempts}`);
 
     // Priority 1: Skip button
     if (tryClickSkipButton()) {
@@ -465,20 +468,21 @@
     let removed = 0;
     
     try {
-      SPONSORED_SELECTORS.forEach(sel => {
-        document.querySelectorAll(sel).forEach(el => {
+      for (const sel of SPONSORED_SELECTORS) {
+        const elements = document.querySelectorAll(sel);
+        for (const el of elements) {
           if (el && el.parentElement && el.style.display !== 'none') {
             el.style.setProperty('display', 'none', 'important');
             el.remove();
             removed++;
           }
-        });
-      });
+        }
+      }
       
       if (removed > 0) {
         state.sessionStats.sponsoredBlocked += removed;
         sendMessage('sponsoredBlocked', { count: removed });
-        log(`🗑️  Removed ${removed} sponsored`);
+        log(`Removed ${removed} sponsored items`);
       }
     } catch (e) {}
   }
@@ -510,9 +514,10 @@
     let removed = 0;
     
     try {
-      POPUP_SELECTORS.forEach(sel => {
-        document.querySelectorAll(sel).forEach(el => {
-          if (!el) return;
+      for (const sel of POPUP_SELECTORS) {
+        const elements = document.querySelectorAll(sel);
+        for (const el of elements) {
+          if (!el) continue;
           
           const text = (el.textContent || '').toLowerCase();
           
@@ -520,18 +525,19 @@
             if (text.includes(indicator)) {
               el.remove();
               removed++;
-              log('🚫 Removed popup');
+              log('Removed anti-adblock popup');
               break;
             }
           }
-        });
-      });
+        }
+      }
       
       // Remove backdrops
-      document.querySelectorAll('tp-yt-iron-overlay-backdrop, #scrim').forEach(el => {
+      const backdrops = document.querySelectorAll('tp-yt-iron-overlay-backdrop, #scrim');
+      for (const el of backdrops) {
         el.remove();
         removed++;
-      });
+      }
       
       if (removed > 0) {
         state.sessionStats.popupsRemoved += removed;
@@ -600,7 +606,7 @@
   
   function init() {
     log('='.repeat(50));
-    log('YouTube Ad Blocker Pro v1.4.0');
+    log('YouTube Ad Blocker Pro v1.5.0');
     log('='.repeat(50));
     
     try {
@@ -621,9 +627,9 @@
       removeSponsoredContent();
       removeAntiAdblockPopups();
       
-      log('✅ Initialized');
+      log('Initialized');
     } catch (e) {
-      log('❌ Init error:', e);
+      log('Init error:', e);
     }
   }
 
