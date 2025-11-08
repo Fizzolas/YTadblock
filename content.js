@@ -16,8 +16,16 @@
     popupCheckInterval: 1000,
     userInteractionWindow: 3000,
     adCooldownPeriod: 5000,
-    debug: false
+    debug: false  // Enable via: chrome.storage.local.set({debugMode: true})
   };
+
+  // Load debug setting from storage
+  chrome.storage.local.get(['debugMode'], (result) => {
+    if (result.debugMode === true) {
+      CONFIG.debug = true;
+      console.log('%c[YT AdBlock Pro] Debug mode ENABLED', 'color: #27e057; font-weight: bold');
+    }
+  });
 
   // ============================================
   // STATE MANAGEMENT
@@ -68,15 +76,15 @@
   
   function log(...args) {
     if (CONFIG.debug) {
-      console.log('[YT AdBlock Pro]', ...args);
+      console.log('%c[YT AdBlock Pro]', 'color: #27e057; font-weight: bold', ...args);
     }
   }
 
   function safeLog(message, error) {
     if (CONFIG.debug && error) {
-      console.error('[YT AdBlock Pro Error]', message, error);
+      console.error('%c[YT AdBlock Pro Error]', 'color: #ff5459; font-weight: bold', message, error);
     } else if (CONFIG.debug) {
-      console.log('[YT AdBlock Pro]', message);
+      console.log('%c[YT AdBlock Pro]', 'color: #27e057; font-weight: bold', message);
     }
   }
 
@@ -322,7 +330,7 @@
     }
     
     if (isAd) {
-      log(`Ad detected! Indicators: ${strongIndicators}, Details: ${adDetails.join(', ')}`);
+      log(`🎯 Ad detected! Indicators: ${strongIndicators}, Details: ${adDetails.join(', ')}`);
     }
     
     return isAd;
@@ -340,7 +348,7 @@
       state.originalMuted = video.muted || false;
       state.originalVolume = video.volume || 1;
       state.userWasWatching = !video.paused;
-      log('State saved:', {
+      log('💾 State saved:', {
         rate: state.originalPlaybackRate,
         muted: state.originalMuted,
         volume: state.originalVolume,
@@ -359,17 +367,17 @@
       if (!userRecentlyInteracted()) {
         if (video.playbackRate !== state.originalPlaybackRate) {
           video.playbackRate = state.originalPlaybackRate;
-          log('Restored rate:', state.originalPlaybackRate);
+          log('✅ Restored rate:', state.originalPlaybackRate);
         }
         
         if (video.muted !== state.originalMuted) {
           video.muted = state.originalMuted;
-          log('Restored mute:', state.originalMuted);
+          log('✅ Restored mute:', state.originalMuted);
         }
         
         if (Math.abs(video.volume - state.originalVolume) > 0.01) {
           video.volume = state.originalVolume;
-          log('Restored volume:', state.originalVolume);
+          log('✅ Restored volume:', state.originalVolume);
         }
       }
       
@@ -402,7 +410,7 @@
           
           skipButton.dispatchEvent(clickEvent);
           skipButton.click();
-          log('Skip button clicked:', selector);
+          log('⏭️  Skip button clicked:', selector);
           return true;
         }
       }
@@ -424,14 +432,14 @@
     try {
       if (!video.muted) {
         video.muted = true;
-        log('Ad muted');
+        log('🔇 Ad muted');
       }
       
       // Use 8x for more stable playback
       const targetSpeed = 8;
       if (video.playbackRate !== targetSpeed) {
         video.playbackRate = targetSpeed;
-        log(`Ad accelerated to ${targetSpeed}x`);
+        log(`⚡ Ad accelerated to ${targetSpeed}x`);
       }
       
       return true;
@@ -452,7 +460,7 @@
       // Only fast-forward if duration is reasonable for ad
       if (duration && duration > 0 && duration < 120 && currentTime < duration - 0.5) {
         video.currentTime = Math.max(duration - 0.3, currentTime);
-        log('Fast-forwarded ad to near end');
+        log('⏩ Fast-forwarded ad to near end');
         return true;
       }
     } catch (error) {
@@ -484,7 +492,7 @@
       state.skipAttempts = 0;
       state.userChangedSpeed = false;
       state.currentAdId = null;
-      log('Video changed, reset state');
+      log('🔄 Video changed, reset state');
     }
 
     // Check if ad is playing
@@ -493,7 +501,7 @@
     // If no ad, restore state if we were processing
     if (!adPlaying) {
       if (state.processingAd) {
-        log('Ad ended, restoring...');
+        log('✅ Ad ended, restoring...');
         restoreVideoState(video);
       }
       return;
@@ -501,7 +509,7 @@
 
     // Ad detected - start processing
     if (!state.processingAd) {
-      log('=== NEW AD DETECTED ===' );
+      log('🚨 === NEW AD DETECTED ===' );
       state.processingAd = true;
       state.skipAttempts = 0;
       state.currentAdId = Date.now();
@@ -519,19 +527,19 @@
 
     // CRITICAL: Stop after max attempts
     if (state.skipAttempts >= CONFIG.maxSkipAttempts) {
-      log('Max attempts reached - waiting for natural end');
+      log('⏸️  Max attempts reached - waiting for natural end');
       return;
     }
 
     state.skipAttempts++;
-    log(`Skip attempt ${state.skipAttempts}/${CONFIG.maxSkipAttempts}`);
+    log(`🎯 Skip attempt ${state.skipAttempts}/${CONFIG.maxSkipAttempts}`);
 
     // Priority 1: Try skip button (most reliable)
     if (tryClickSkipButton()) {
       setTimeout(() => {
         const video = getVideo();
         if (video && !isAdPlaying(video)) {
-          log('Skip successful!');
+          log('✅ Skip successful!');
           restoreVideoState(video);
         }
       }, 500);
@@ -543,7 +551,7 @@
       setTimeout(() => {
         const video = getVideo();
         if (video && !isAdPlaying(video)) {
-          log('Fast-forward successful!');
+          log('✅ Fast-forward successful!');
           restoreVideoState(video);
         }
       }, 500);
@@ -601,7 +609,7 @@
         } catch (e) {
           // Extension context invalidated
         }
-        log(`Removed ${removed} sponsored items`);
+        log(`🗑️  Removed ${removed} sponsored items`);
       }
     } catch (e) {
       safeLog('Error removing sponsored content', e);
@@ -647,7 +655,7 @@
             if (text.includes(indicator)) {
               el.remove();
               removed++;
-              log('Removed anti-adblock popup:', indicator);
+              log('🚫 Removed anti-adblock popup:', indicator);
               break;
             }
           }
@@ -674,7 +682,7 @@
           document.body.style.overflow = '';
         }
         
-        log(`Removed ${removed} popup elements`);
+        log(`🗑️  Removed ${removed} popup elements`);
       }
     } catch (e) {
       safeLog('Error removing popups', e);
@@ -689,7 +697,7 @@
     try {
       if (request.action === 'toggle') {
         state.isActive = !state.isActive;
-        log('Extension toggled:', state.isActive ? 'ON' : 'OFF');
+        log('🔄 Extension toggled:', state.isActive ? 'ON' : 'OFF');
         
         if (!state.isActive && state.processingAd) {
           const video = getVideo();
@@ -707,6 +715,18 @@
       }
       else if (request.action === 'getSessionStats') {
         sendResponse(state.sessionStats);
+      }
+      else if (request.action === 'enableDebug') {
+        CONFIG.debug = true;
+        chrome.storage.local.set({ debugMode: true });
+        console.log('%c[YT AdBlock Pro] Debug mode ENABLED by popup', 'color: #27e057; font-weight: bold');
+        sendResponse({ debug: true });
+      }
+      else if (request.action === 'disableDebug') {
+        CONFIG.debug = false;
+        chrome.storage.local.set({ debugMode: false });
+        console.log('%c[YT AdBlock Pro] Debug mode DISABLED', 'color: #ff5459; font-weight: bold');
+        sendResponse({ debug: false });
       }
     } catch (e) {
       safeLog('Error handling message', e);
@@ -758,7 +778,8 @@
       removeSponsoredContent();
       removeAntiAdblockPopups();
       
-      log('Initialization complete - Safe mode active');
+      log('✅ Initialization complete - Safe mode active');
+      log('💡 Enable debug mode: chrome.storage.local.set({debugMode: true})');
       log('='.repeat(50));
     } catch (e) {
       safeLog('Critical error during initialization', e);
