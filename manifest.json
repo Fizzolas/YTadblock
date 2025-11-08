@@ -2,16 +2,22 @@
   "manifest_version": 3,
   "name": "YouTube Ad Blocker Pro",
   "version": "1.5.0",
-  "description": "Blocks YouTube ads, skips automatically, removes sponsored content and anti-adblock popups. Fast, lightweight, respects user controls.",
+  "description": "Blocks YouTube ads, skips automatically, and removes sponsored content. Fast, lightweight, and privacy-focused.",
+  "author": "Fizzolas",
+  "homepage_url": "https://github.com/Fizzolas/YTadblock",
+  
   "permissions": [
     "storage"
   ],
+  
   "host_permissions": [
     "*://*.youtube.com/*"
   ],
+  
   "background": {
     "service_worker": "background.js"
   },
+  
   "content_scripts": [
     {
       "matches": ["*://*.youtube.com/*"],
@@ -19,17 +25,22 @@
       "run_at": "document_start"
     }
   ],
+  
   "action": {
     "default_popup": "popup.html",
+    "default_title": "YouTube Ad Blocker Pro",
     "default_icon": {
       "16": "Icons/icon16.png",
       "48": "Icons/icon48.png",
       "128": "Icons/icon128.png"
     }
   },
+  
   "icons": {
     "16": "Icons/icon16.png",
     "48": "Icons/icon48.png",
     "128": "Icons/icon128.png"
-  }
+  },
+  
+  "minimum_chrome_version": "88"
 }
