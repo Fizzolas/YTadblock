@@ -1,5 +1,5 @@
 // YT Ad Blocker Pro - Fast, Minimal Popup
-// v1.2.2-dev
+// v1.3.0 - November 2025
 
 document.addEventListener('DOMContentLoaded',()=>{
   const statusDot=document.getElementById('statusDot'),statusText=document.getElementById('statusText'),toggleBtn=document.getElementById('toggleBtn'),toggleText=document.getElementById('toggleText');
