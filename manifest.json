@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Ad Blocker Pro",
-  "version": "1.3.0",
-  "description": "Advanced YouTube ad blocker with SSAI handling, 16x acceleration, automatic skipping, sponsored content removal, and anti-adblock popup elimination",
+  "version": "1.3.1",
+  "description": "YouTube ad blocker with precise detection - never interferes with user actions, respects skip buttons",
   "permissions": [
     "storage"
   ],
