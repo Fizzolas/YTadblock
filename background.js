@@ -1,4 +1,4 @@
-// YouTube Ad Blocker Pro - Background Service Worker v1.4.0
+// YouTube Ad Blocker Pro - Background Service Worker v1.5.0
 // Handles statistics tracking and service worker lifecycle
 
 chrome.runtime.onInstalled.addListener((details) => {
@@ -15,7 +15,7 @@ chrome.runtime.onInstalled.addListener((details) => {
       }).catch(err => console.error('[YT AdBlock] Storage error:', err));
       
     } else if (details.reason === 'update') {
-      console.log('[YT AdBlock] Updated to', chrome.runtime.getManifest().version);
+      console.log('[YT AdBlock] Updated to v' + chrome.runtime.getManifest().version);
       
       // Ensure all stat fields exist
       chrome.storage.local.get(['sponsoredBlocked', 'popupsRemoved', 'installDate'], (result) => {
@@ -72,11 +72,12 @@ chrome.runtime.onStartup.addListener(() => {
   console.log('[YT AdBlock] Service worker started');
 });
 
-// Keep service worker alive
-let keepAliveInterval = setInterval(() => {
+// Keep service worker alive with optimized interval
+setInterval(() => {
   chrome.storage.local.get(['adsBlocked'], () => {});
 }, 25000);
 
+// Service worker error handling
 if (typeof self !== 'undefined') {
   self.addEventListener('activate', () => {
     console.log('[YT AdBlock] Worker activated');
