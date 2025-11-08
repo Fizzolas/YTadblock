@@ -1,5 +1,5 @@
-// YouTube Ad Blocker Pro - Production v1.5.0
-// Optimized for performance, stability, and Chrome Web Store compliance
+// YouTube Ad Blocker Pro - Content Script v1.5.0
+// Production-ready, fully optimized, Chrome Web Store compliant
 
 (function() {
   'use strict';
@@ -14,15 +14,16 @@
     sponsoredCheckInterval: 2000,
     popupCheckInterval: 1000,
     userInteractionWindow: 3000,
-    adCooldownPeriod: 3000,
+    minAdIndicators: 2,
+    maxAdSpeed: 8,
     debug: false
   };
 
-  // Load debug setting
+  // Load debug setting from storage
   chrome.storage.local.get(['debugMode'], (result) => {
     CONFIG.debug = !!result.debugMode;
     if (CONFIG.debug) {
-      console.log('%c[YT AdBlock] Debug mode enabled', 'color: #27e057; font-weight: bold');
+      console.log('%c[YT AdBlock Pro]', 'color: #27e057; font-weight: bold', 'Debug mode enabled');
     }
   });
 
@@ -32,7 +33,6 @@
   const state = {
     isActive: true,
     currentVideoId: null,
-    lastAdEndTime: 0,
     userPausedVideo: false,
     userChangedSpeed: false,
     lastUserInteraction: 0,
@@ -42,20 +42,29 @@
     processingAd: false,
     skipAttempts: 0,
     sessionStats: { adsBlocked: 0, sponsoredBlocked: 0, popupsRemoved: 0 },
-    intervals: { adCheck: null, sponsoredCheck: null, popupCheck: null },
+    intervals: { main: null },
+    observers: { settings: null },
     cleanupDone: false
   };
 
   // ============================================
-  // UTILITIES
+  // UTILITY FUNCTIONS
   // ============================================
   
+  /**
+   * Safe logging that respects debug mode
+   * @param {...any} args - Arguments to log
+   */
   function log(...args) {
     if (CONFIG.debug) {
-      console.log('%c[YT AdBlock]', 'color: #27e057; font-weight: bold', ...args);
+      console.log('%c[YT AdBlock Pro]', 'color: #27e057; font-weight: bold', ...args);
     }
   }
 
+  /**
+   * Get the main video element
+   * @returns {HTMLVideoElement|null} Video element or null if not found
+   */
   function getVideo() {
     try {
       return document.querySelector('video.html5-main-video');
@@ -64,6 +73,10 @@
     }
   }
 
+  /**
+   * Get current video ID from URL
+   * @returns {string|null} Video ID or null
+   */
   function getCurrentVideoId() {
     try {
       const urlParams = new URLSearchParams(window.location.search);
@@ -73,6 +86,11 @@
     }
   }
 
+  /**
+   * Check if element is visible in viewport
+   * @param {HTMLElement} el - Element to check
+   * @returns {boolean} True if visible
+   */
   function isElementVisible(el) {
     if (!el || !el.offsetParent) return false;
     
@@ -90,10 +108,19 @@
     }
   }
 
+  /**
+   * Check if user recently interacted with video
+   * @returns {boolean} True if recent interaction
+   */
   function userRecentlyInteracted() {
     return (Date.now() - state.lastUserInteraction) < CONFIG.userInteractionWindow;
   }
 
+  /**
+   * Send message to background script
+   * @param {string} action - Action type
+   * @param {Object} data - Additional data
+   */
   function sendMessage(action, data = {}) {
     try {
       chrome.runtime.sendMessage({ action, ...data }).catch(() => {});
@@ -106,6 +133,9 @@
   // USER INTERACTION TRACKING
   // ============================================
   
+  /**
+   * Setup event listeners for user interactions
+   */
   function setupUserInteractionListeners() {
     const video = getVideo();
     if (!video) {
@@ -148,22 +178,27 @@
       } catch (err) {}
     }, true);
     
-    // Monitor settings menu
-    const observeSettings = () => {
+    // Monitor settings menu only when it exists
+    const checkSettingsMenu = () => {
       try {
         const settingsMenu = document.querySelector('.ytp-settings-menu');
-        if (settingsMenu) {
-          const observer = new MutationObserver(() => {
+        if (settingsMenu && !state.observers.settings) {
+          state.observers.settings = new MutationObserver(() => {
             state.lastUserInteraction = Date.now();
             state.userChangedSpeed = true;
           });
-          observer.observe(settingsMenu, { attributes: true, childList: true, subtree: true });
+          state.observers.settings.observe(settingsMenu, { 
+            attributes: true, 
+            childList: true, 
+            subtree: true 
+          });
+          log('Settings menu observer attached');
         }
       } catch (e) {}
     };
     
-    observeSettings();
-    setInterval(observeSettings, 5000);
+    // Check for settings menu periodically
+    setInterval(checkSettingsMenu, 5000);
   }
 
   // ============================================
@@ -195,46 +230,60 @@
     ]
   };
 
+  /**
+   * Detect if an ad is currently playing
+   * @param {HTMLVideoElement} video - Video element to check
+   * @returns {boolean} True if ad detected
+   */
   function isAdPlaying(video) {
     if (!video || userRecentlyInteracted()) return false;
-    
-    // Cooldown period after ad ends
-    if (state.lastAdEndTime && (Date.now() - state.lastAdEndTime) < CONFIG.adCooldownPeriod) {
-      return false;
-    }
 
     let indicators = 0;
     
     try {
       // Check containers
       for (const sel of AD_SELECTORS.containers) {
-        if (isElementVisible(document.querySelector(sel))) indicators++;
+        const el = document.querySelector(sel);
+        if (el && isElementVisible(el)) {
+          indicators++;
+          break; // Only count once
+        }
       }
       
       // Check player class
       const player = document.querySelector('.html5-video-player');
-      if (player?.classList.contains('ad-showing')) indicators += 2;
+      if (player?.classList.contains('ad-showing')) {
+        indicators += 2;
+      }
       
       // Check skip buttons (strong indicator)
       for (const sel of AD_SELECTORS.skipButtons) {
-        if (isElementVisible(document.querySelector(sel))) {
+        const btn = document.querySelector(sel);
+        if (btn && isElementVisible(btn)) {
           indicators += 2;
-          break;
+          break; // Only count once
         }
       }
       
       // Check badges
       for (const sel of AD_SELECTORS.badges) {
         const badge = document.querySelector(sel);
-        if (isElementVisible(badge)) {
+        if (badge && isElementVisible(badge)) {
           const text = (badge.textContent || '').toLowerCase();
-          if (text.includes('ad')) indicators++;
+          if (text.includes('ad')) {
+            indicators++;
+            break; // Only count once
+          }
         }
       }
       
       // Check overlays
       for (const sel of AD_SELECTORS.overlays) {
-        if (isElementVisible(document.querySelector(sel))) indicators++;
+        const el = document.querySelector(sel);
+        if (el && isElementVisible(el)) {
+          indicators++;
+          break; // Only count once
+        }
       }
       
       // Check short duration
@@ -246,7 +295,7 @@
       return false;
     }
 
-    const isAd = indicators >= 2;
+    const isAd = indicators >= CONFIG.minAdIndicators;
     
     // Safety checks - don't interfere with user actions
     if (isAd) {
@@ -254,7 +303,7 @@
         return false;
       }
       
-      if (state.userChangedSpeed && video.playbackRate !== 8 && userRecentlyInteracted()) {
+      if (state.userChangedSpeed && video.playbackRate !== CONFIG.maxAdSpeed && userRecentlyInteracted()) {
         return false;
       }
       
@@ -268,6 +317,10 @@
   // VIDEO STATE MANAGEMENT
   // ============================================
   
+  /**
+   * Save current video state before modification
+   * @param {HTMLVideoElement} video - Video element
+   */
   function saveVideoState(video) {
     if (!video || state.processingAd) return;
     
@@ -275,10 +328,17 @@
       state.originalPlaybackRate = video.playbackRate || 1;
       state.originalMuted = video.muted || false;
       state.originalVolume = video.volume || 1;
-      log('State saved:', { rate: state.originalPlaybackRate, muted: state.originalMuted });
+      log('State saved:', { 
+        rate: state.originalPlaybackRate, 
+        muted: state.originalMuted 
+      });
     } catch (e) {}
   }
 
+  /**
+   * Restore video state after ad
+   * @param {HTMLVideoElement} video - Video element
+   */
   function restoreVideoState(video) {
     if (!video || !state.processingAd) return;
     
@@ -297,7 +357,6 @@
       
       state.processingAd = false;
       state.skipAttempts = 0;
-      state.lastAdEndTime = Date.now();
       
       log('State restored');
     } catch (e) {}
@@ -307,6 +366,10 @@
   // AD SKIPPING
   // ============================================
   
+  /**
+   * Try to click skip button
+   * @returns {boolean} True if button clicked
+   */
   function tryClickSkipButton() {
     try {
       for (const selector of AD_SELECTORS.skipButtons) {
@@ -326,6 +389,11 @@
     return false;
   }
 
+  /**
+   * Accelerate ad playback
+   * @param {HTMLVideoElement} video - Video element
+   * @returns {boolean} True if accelerated
+   */
   function accelerateAd(video) {
     if (!video || !state.processingAd) return false;
     if (state.userChangedSpeed && userRecentlyInteracted()) return false;
@@ -336,9 +404,9 @@
         log('Muted');
       }
       
-      if (video.playbackRate !== 8) {
-        video.playbackRate = 8;
-        log('8x speed');
+      if (video.playbackRate !== CONFIG.maxAdSpeed) {
+        video.playbackRate = CONFIG.maxAdSpeed;
+        log(`${CONFIG.maxAdSpeed}x speed`);
       }
       
       return true;
@@ -347,6 +415,11 @@
     }
   }
 
+  /**
+   * Try to fast-forward through ad
+   * @param {HTMLVideoElement} video - Video element
+   * @returns {boolean} True if fast-forwarded
+   */
   function tryFastForward(video) {
     if (!video) return false;
     
@@ -368,6 +441,9 @@
   // MAIN AD HANDLER
   // ============================================
   
+  /**
+   * Handle ad detection and skipping
+   */
   function handleAdSkip() {
     if (!state.isActive) return;
     
@@ -384,7 +460,7 @@
       state.currentVideoId = videoId;
       state.processingAd = false;
       state.skipAttempts = 0;
-      state.userChangedSpeed = false;
+      state.userChangedSpeed = false; // CRITICAL FIX: Reset speed flag on video change
       log('Video changed');
     }
 
@@ -462,6 +538,9 @@
     'ytd-brand-video-singleton-renderer'
   ];
 
+  /**
+   * Remove sponsored content from page
+   */
   function removeSponsoredContent() {
     if (!state.isActive) return;
     
@@ -508,6 +587,9 @@
     'adblocker'
   ];
 
+  /**
+   * Remove anti-adblock popups
+   */
   function removeAntiAdblockPopups() {
     if (!state.isActive) return;
     
@@ -548,6 +630,42 @@
         }
       }
     } catch (e) {}
+  }
+
+  // ============================================
+  // CONSOLIDATED MAIN LOOP
+  // ============================================
+  
+  /**
+   * Main processing loop - handles all periodic tasks
+   */
+  function mainLoop() {
+    try {
+      handleAdSkip();
+    } catch (e) {
+      log('Error in ad handling:', e);
+    }
+    
+    // Run sponsored and popup checks less frequently
+    const now = Date.now();
+    
+    if (!mainLoop.lastSponsored || now - mainLoop.lastSponsored >= CONFIG.sponsoredCheckInterval) {
+      try {
+        removeSponsoredContent();
+      } catch (e) {
+        log('Error in sponsored removal:', e);
+      }
+      mainLoop.lastSponsored = now;
+    }
+    
+    if (!mainLoop.lastPopup || now - mainLoop.lastPopup >= CONFIG.popupCheckInterval) {
+      try {
+        removeAntiAdblockPopups();
+      } catch (e) {
+        log('Error in popup removal:', e);
+      }
+      mainLoop.lastPopup = now;
+    }
   }
 
   // ============================================
@@ -604,6 +722,9 @@
   // INITIALIZATION
   // ============================================
   
+  /**
+   * Initialize the extension
+   */
   function init() {
     log('='.repeat(50));
     log('YouTube Ad Blocker Pro v1.5.0');
@@ -612,22 +733,14 @@
     try {
       setupUserInteractionListeners();
       
-      state.intervals.adCheck = setInterval(() => {
-        try { handleAdSkip(); } catch (e) {}
-      }, CONFIG.adCheckInterval);
+      // Start consolidated main loop
+      state.intervals.main = setInterval(mainLoop, CONFIG.adCheckInterval);
       
-      state.intervals.sponsoredCheck = setInterval(() => {
-        try { removeSponsoredContent(); } catch (e) {}
-      }, CONFIG.sponsoredCheckInterval);
-      
-      state.intervals.popupCheck = setInterval(() => {
-        try { removeAntiAdblockPopups(); } catch (e) {}
-      }, CONFIG.popupCheckInterval);
-      
+      // Initial cleanup
       removeSponsoredContent();
       removeAntiAdblockPopups();
       
-      log('Initialized');
+      log('Initialized successfully');
     } catch (e) {
       log('Init error:', e);
     }
@@ -638,10 +751,16 @@
     if (state.cleanupDone) return;
     
     try {
-      Object.values(state.intervals).forEach(interval => {
-        if (interval) clearInterval(interval);
-      });
+      if (state.intervals.main) {
+        clearInterval(state.intervals.main);
+      }
+      
+      if (state.observers.settings) {
+        state.observers.settings.disconnect();
+      }
+      
       state.cleanupDone = true;
+      log('Cleanup complete');
     } catch (e) {}
   });
 
