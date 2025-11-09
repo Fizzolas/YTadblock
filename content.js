@@ -206,13 +206,18 @@
 	  // AD DETECTION
   // ============================================
   
-  const AD_SELECTORS = {
-    containers: [
-      '.video-ads.ytp-ad-module',
-      'div.ad-showing',
-      '.ytp-ad-player-overlay',
-      '.ytp-ad-player-overlay-instream-info'
-    ],
+	  const AD_SELECTORS = {
+	    containers: [
+	      '.video-ads.ytp-ad-module',
+	      'div.ad-showing',
+	      '.ytp-ad-player-overlay',
+	      '.ytp-ad-player-overlay-instream-info',
+	      // New/Alternative Ad Containers
+	      'ytd-promoted-sparkles-web-renderer',
+	      'ytd-in-feed-ad-layout-renderer',
+	      '.ytp-ad-action-interstitial-slot',
+	      '.ytp-ad-text-overlay'
+	    ],
     skipButtons: [
       'button.ytp-ad-skip-button',
       'button.ytp-ad-skip-button-modern',
@@ -242,14 +247,14 @@
     let indicators = 0;
     
     try {
-      // Check containers
-      for (const sel of AD_SELECTORS.containers) {
-        const el = document.querySelector(sel);
-        if (el && isElementVisible(el)) {
-          indicators++;
-          break;
-        }
-      }
+	      // Check containers (stronger indicator)
+	      for (const sel of AD_SELECTORS.containers) {
+	        const el = document.querySelector(sel);
+	        if (el && isElementVisible(el)) {
+	          indicators += 2; // Increased weight for container detection
+	          break;
+	        }
+	      }
       
 	    // Check skip buttons (strongest indicator)
 	    for (const sel of AD_SELECTORS.skipButtons) {
@@ -266,17 +271,17 @@
 	      indicators += 2;
 	    }
       
-      // Check badges
-      for (const sel of AD_SELECTORS.badges) {
-        const badge = document.querySelector(sel);
-        if (badge && isElementVisible(badge)) {
-          const text = (badge.textContent || '').toLowerCase();
-          if (text.includes('ad')) {
-            indicators++;
-            break;
-          }
-        }
-      }
+	      // Check badges
+	      for (const sel of AD_SELECTORS.badges) {
+	        const badge = document.querySelector(sel);
+	        if (badge && isElementVisible(badge)) {
+	          const text = (badge.textContent || '').toLowerCase();
+	          if (text.includes('ad') || text.includes('sponsored')) {
+	            indicators++;
+	            break;
+	          }
+	        }
+	      }
       
       // Check overlays
       for (const sel of AD_SELECTORS.overlays) {
@@ -298,20 +303,31 @@
 
     const isAd = indicators >= CONFIG.minAdIndicators;
     
-    // Safety checks - don't interfere with user actions
-    if (isAd) {
-      if (video.paused && state.userPausedVideo && userRecentlyInteracted()) {
-        return false;
-      }
-      
-      if (state.userChangedSpeed && video.playbackRate !== CONFIG.maxAdSpeed && userRecentlyInteracted()) {
-        return false;
-      }
-      
-      log(`Ad detected (${indicators} indicators)`);
-    }
-    
-    return isAd;
+	    // Safety checks - don't interfere with user actions
+	    if (isAd) {
+	      // Only prevent ad-blocking if the user explicitly paused the video
+	      if (video.paused && state.userPausedVideo && userRecentlyInteracted()) {
+	        log('Ad detected, but blocked due to recent user pause.');
+	        return false;
+	      }
+	      
+	      // Only prevent ad-blocking if the user explicitly changed the speed
+	      if (state.userChangedSpeed && video.playbackRate !== state.originalPlaybackRate && userRecentlyInteracted()) {
+	        log('Ad detected, but blocked due to recent user speed change.');
+	        return false;
+	      }
+	      
+	      log(`Ad detected (${indicators} indicators)`);
+	    }
+	    
+	    // Final check: If the video is muted and has a short duration, it's highly likely an ad.
+	    if (video.muted && video.duration > 0 && video.duration < 120) {
+	      indicators += 2;
+	      isAd = indicators >= CONFIG.minAdIndicators;
+	      if (isAd) log('Ad confirmed by muted short video heuristic.');
+	    }
+	    
+	    return isAd;
   }
 
   // ============================================
@@ -465,36 +481,49 @@
       log('Video changed');
     }
 
-    const adPlaying = isAdPlaying(video);
-    
-    // Ad ended, restore
-    if (!adPlaying) {
-      if (state.processingAd) {
-        log('Ad ended');
-        restoreVideoState(video);
-      }
-      return;
-    }
-
-    // New ad detected
-    if (!state.processingAd) {
-      log('New ad detected');
-      state.processingAd = true;
-      state.skipAttempts = 0;
-      saveVideoState(video);
-      state.sessionStats.adsBlocked++;
-      sendMessage('adBlocked');
-    }
-
-    // Max attempts reached
-    if (state.skipAttempts >= CONFIG.maxSkipAttempts) {
-      return;
-    }
-
-    state.skipAttempts++;
-    log(`Attempt ${state.skipAttempts}/${CONFIG.maxSkipAttempts}`);
-
-    // Priority 1: Skip button
+	    const adPlaying = isAdPlaying(video);
+	    
+	    // Ad ended, restore
+	    if (!adPlaying) {
+	      if (state.processingAd) {
+	        log('Ad ended');
+	        restoreVideoState(video);
+	      }
+	      return;
+	    }
+	
+	    // New ad detected
+	    if (!state.processingAd) {
+	      log('New ad detected');
+	      state.processingAd = true;
+	      state.skipAttempts = 0;
+	      saveVideoState(video);
+	      state.sessionStats.adsBlocked++;
+	      sendMessage('adBlocked');
+	    }
+	    
+	    // CRITICAL CHECK: Ensure video is playing before attempting to skip/accelerate
+	    if (video.paused) {
+	      // Attempt to play the video if it's an ad and not paused by user
+	      if (!state.userPausedVideo || !userRecentlyInteracted()) {
+	        video.play().catch(e => log('Failed to auto-play ad video:', e));
+	      }
+	      // If still paused (e.g., due to user interaction or YouTube's block), wait for next interval
+	      if (video.paused) {
+	        log('Ad detected but video is paused. Waiting for next interval.');
+	        return;
+	      }
+	    }
+	
+	    // Max attempts reached
+	    if (state.skipAttempts >= CONFIG.maxSkipAttempts) {
+	      return;
+	    }
+	
+	    state.skipAttempts++;
+	    log(`Attempt ${state.skipAttempts}/${CONFIG.maxSkipAttempts}`);
+	
+	    // Priority 1: Skip button
     if (tryClickSkipButton()) {
       // Skip button click is the most reliable method.
       // We rely on the adPlaying check in the next loop iteration to restore state.

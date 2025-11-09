@@ -2,6 +2,15 @@
 
 All notable changes to YouTube Ad Blocker Pro will be documented in this file.
 
+## [1.5.3] - 2025-11-09
+
+### 🐛 Critical Bug Fixes
+- **Ad Blocking Failure:** Fixed a critical issue where ads were sometimes ignored entirely. Implemented a check to ensure the video is playing and attempt to auto-play the ad video if it is paused, allowing the skip/acceleration logic to execute.
+- **Robust Ad Detection:** Added new, modern ad container selectors to `content.js` to improve detection reliability against the latest YouTube changes.
+- **Heuristic Improvement:** Added a new heuristic check to confirm ads based on muted, short-duration video segments, further increasing detection accuracy.
+
+---
+
 ## [1.5.2] - 2025-11-09
 
 ### ⚡ Performance Optimizations
