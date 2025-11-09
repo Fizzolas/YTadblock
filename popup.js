@@ -1,4 +1,4 @@
-// YouTube Ad Blocker Pro - Popup Script v1.5.0
+// YouTube Ad Blocker Pro - Popup Script v1.5.1
 // Handles popup UI and statistics display
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -25,10 +25,21 @@ document.addEventListener('DOMContentLoaded', () => {
    * @returns {string} Formatted number string
    */
   function fmt(n) {
-    if (typeof n === 'number') {
+    if (typeof n === 'number' && !isNaN(n)) {
       return n.toLocaleString();
     }
-    return n || '0';
+    return String(n || '0');
+  }
+
+  /**
+   * Safely update element text content
+   * @param {HTMLElement|null} el - Element to update
+   * @param {string} value - New text value
+   */
+  function updateElement(el, value) {
+    if (el && el.textContent !== value) {
+      el.textContent = value;
+    }
   }
 
   /**
@@ -38,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function getActiveTab() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      return tab;
+      return tab || null;
     } catch (e) {
       console.error('[YT AdBlock Pro] Error getting tab:', e);
       return null;
@@ -69,9 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
       elements.forEach((el, i) => {
         if (el) {
           const formatted = i === 3 ? `${stats[i]}d` : fmt(stats[i]);
-          if (el.textContent !== formatted) {
-            el.textContent = formatted;
-          }
+          updateElement(el, formatted);
         }
       });
     } catch (e) {
@@ -83,9 +92,9 @@ document.addEventListener('DOMContentLoaded', () => {
    * Load and display session statistics from content script
    */
   async function loadSessionStats() {
-    if (!isYouTubePage || !currentTab) {
+    if (!isYouTubePage || !currentTab || !currentTab.id) {
       [sessionAdsEl, sessionSponEl, sessionPopupEl].forEach(el => {
-        if (el && el.textContent !== '-') el.textContent = '-';
+        updateElement(el, '-');
       });
       return;
     }
@@ -95,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         action: 'getSessionStats' 
       });
       
-      if (response && !response.error) {
+      if (response && typeof response === 'object' && !response.error) {
         const sessions = [
           response.adsBlocked || 0,
           response.sponsoredBlocked || 0,
@@ -104,22 +113,15 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const elements = [sessionAdsEl, sessionSponEl, sessionPopupEl];
         elements.forEach((el, i) => {
-          if (el) {
-            const formatted = fmt(sessions[i]);
-            if (el.textContent !== formatted) {
-              el.textContent = formatted;
-            }
-          }
+          updateElement(el, fmt(sessions[i]));
         });
       } else {
-        throw new Error('Invalid response');
+        throw new Error('Invalid response from content script');
       }
     } catch (e) {
       // Content script not ready - show zeros instead of errors
       [sessionAdsEl, sessionSponEl, sessionPopupEl].forEach(el => {
-        if (el && el.textContent !== '0') {
-          el.textContent = '0';
-        }
+        updateElement(el, '0');
       });
     }
   }
@@ -128,8 +130,12 @@ document.addEventListener('DOMContentLoaded', () => {
    * Load all statistics (persistent + session)
    */
   async function loadAllStats() {
-    await loadPersistentStats();
-    await loadSessionStats();
+    try {
+      await loadPersistentStats();
+      await loadSessionStats();
+    } catch (e) {
+      console.error('[YT AdBlock Pro] Error loading stats:', e);
+    }
   }
 
   /**
@@ -139,7 +145,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function setStatus(active) {
     if (!statusDot || !statusText || !toggleText || !toggleBtn) return;
     
-    if (active) {
+    const isActive = Boolean(active);
+    
+    if (isActive) {
       statusDot.className = 'dot dot-ac';
       statusText.textContent = 'Active';
       toggleText.textContent = 'Disable';
@@ -156,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * Setup toggle button and get initial status
    */
   async function setupToggle() {
-    if (!isYouTubePage || !currentTab) {
+    if (!isYouTubePage || !currentTab || !currentTab.id) {
       if (statusText) statusText.textContent = 'Not on YouTube';
       if (toggleBtn) toggleBtn.disabled = true;
       return;
@@ -168,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
         action: 'getStatus' 
       });
       
-      if (response && !response.error) {
+      if (response && typeof response === 'object' && !response.error) {
         setStatus(response.active);
       } else {
         setStatus(true); // Default to active
@@ -181,12 +189,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup toggle button handler
     if (toggleBtn) {
       toggleBtn.onclick = async () => {
+        if (!currentTab || !currentTab.id) return;
+        
         try {
           const response = await chrome.tabs.sendMessage(currentTab.id, { 
             action: 'toggle' 
           });
           
-          if (response && !response.error) {
+          if (response && typeof response === 'object' && !response.error) {
             setStatus(response.active);
           }
         } catch (e) {
@@ -203,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       currentTab = await getActiveTab();
       
-      if (currentTab && currentTab.url) {
+      if (currentTab && currentTab.url && typeof currentTab.url === 'string') {
         isYouTubePage = currentTab.url.includes('youtube.com');
       }
 
@@ -224,6 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('unload', () => {
     if (updateInterval) {
       clearInterval(updateInterval);
+      updateInterval = null;
     }
   });
 
