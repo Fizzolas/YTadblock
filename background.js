@@ -1,4 +1,4 @@
-// YouTube Ad Blocker Pro - Background Service Worker v1.5.0
+// YouTube Ad Blocker Pro - Background Service Worker v1.5.1
 // Handles statistics tracking and service worker lifecycle
 
 /**
@@ -47,7 +47,22 @@ chrome.runtime.onInstalled.addListener((details) => {
  * @param {number} increment - Amount to increment by
  */
 function updateStat(key, increment = 1) {
+  if (!key || typeof key !== 'string') {
+    console.error('[YT AdBlock Pro] Invalid stat key:', key);
+    return;
+  }
+
+  if (typeof increment !== 'number' || increment < 0) {
+    console.error('[YT AdBlock Pro] Invalid increment:', increment);
+    return;
+  }
+
   chrome.storage.local.get([key], (result) => {
+    if (chrome.runtime.lastError) {
+      console.error('[YT AdBlock Pro] Error reading storage:', chrome.runtime.lastError);
+      return;
+    }
+
     const count = (result[key] || 0) + increment;
     chrome.storage.local.set({ [key]: count }).catch(err => 
       console.error(`[YT AdBlock Pro] Error updating ${key}:`, err)
@@ -60,14 +75,18 @@ function updateStat(key, increment = 1) {
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   try {
-    if (!request?.action) return false;
+    if (!request || typeof request !== 'object' || !request.action) {
+      console.warn('[YT AdBlock Pro] Invalid message format:', request);
+      return false;
+    }
     
     switch (request.action) {
       case 'adBlocked':
         updateStat('adsBlocked');
         break;
       case 'sponsoredBlocked':
-        updateStat('sponsoredBlocked', request.count || 1);
+        const count = request.count && typeof request.count === 'number' ? request.count : 1;
+        updateStat('sponsoredBlocked', count);
         break;
       case 'popupRemoved':
         updateStat('popupsRemoved');
@@ -93,10 +112,17 @@ chrome.runtime.onStartup.addListener(() => {
  * Keep service worker alive with optimal interval (30s minimum recommended)
  * This prevents the service worker from being terminated during active use
  */
-setInterval(() => {
-  chrome.storage.local.get(['adsBlocked'], () => {
-    // Simple storage access keeps worker alive
-  });
+let keepAliveInterval = setInterval(() => {
+  try {
+    chrome.storage.local.get(['adsBlocked'], (result) => {
+      if (chrome.runtime.lastError) {
+        console.error('[YT AdBlock Pro] Keep-alive error:', chrome.runtime.lastError);
+      }
+      // Simple storage access keeps worker alive
+    });
+  } catch (e) {
+    console.error('[YT AdBlock Pro] Keep-alive exception:', e);
+  }
 }, 30000);
 
 /**
