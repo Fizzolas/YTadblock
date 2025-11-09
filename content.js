@@ -264,12 +264,27 @@
    * @param {HTMLVideoElement} video - Video element to check
    * @returns {boolean} True if ad detected
    */
-  function isAdPlaying(video) {
-    if (!video || userRecentlyInteracted()) return false;
-
-    let indicators = 0;
-    
-    try {
+	  function isAdPlaying(video) {
+	    if (!video || userRecentlyInteracted()) return false;
+	
+	    // CRITICAL FIX: Prioritize the official YouTube player class as the primary indicator.
+	    // If this class is not present, it is NOT an ad, regardless of other heuristics.
+	    const player = document.querySelector('.html5-video-player');
+	    const isPlayerAdShowing = player?.classList.contains('ad-showing');
+	    
+	    if (!isPlayerAdShowing) {
+	      // If the player is not officially in 'ad-showing' mode, we must ensure the video is not
+	      // being misidentified by the heuristics.
+	      // The only exception is if a skip button is visible, which is a direct ad indicator.
+	      const skipButtonVisible = !!document.querySelector(AD_SELECTORS.skipButtons.join(', '));
+	      if (!skipButtonVisible) {
+	        return false;
+	      }
+	    }
+	
+	    let indicators = 0;
+	    
+	    try {
 	      // Check containers (stronger indicator)
 	      for (const sel of AD_SELECTORS.containers) {
 	        const el = document.querySelector(sel);
@@ -278,7 +293,7 @@
 	          break;
 	        }
 	      }
-      
+	      
 	    // Check skip buttons (strongest indicator)
 	    for (const sel of AD_SELECTORS.skipButtons) {
 	      const btn = document.querySelector(sel);
@@ -288,12 +303,11 @@
 	      }
 	    }
 	    
-	    // Check player class
-	    const player = document.querySelector('.html5-video-player');
-	    if (player?.classList.contains('ad-showing')) {
+	    // Check player class (already checked above, but included for indicator count)
+	    if (isPlayerAdShowing) {
 	      indicators += 2;
 	    }
-      
+	      
 	      // Check badges
 	      for (const sel of AD_SELECTORS.badges) {
 	        const badge = document.querySelector(sel);
@@ -305,27 +319,27 @@
 	          }
 	        }
 	      }
-      
-      // Check overlays
-      for (const sel of AD_SELECTORS.overlays) {
-        const el = document.querySelector(sel);
-        if (el && isElementVisible(el)) {
-          indicators++;
-          break;
-        }
-      }
-      
-      // Check short duration
-      if (video.duration > 0 && video.duration < 120) {
-        const timeEl = document.querySelector('.ytp-time-duration');
-        if (timeEl?.textContent) indicators++;
-      }
-    } catch (e) {
-      return false;
-    }
-
-    const isAd = indicators >= CONFIG.minAdIndicators;
-    
+	      
+	      // Check overlays
+	      for (const sel of AD_SELECTORS.overlays) {
+	        const el = document.querySelector(sel);
+	        if (el && isElementVisible(el)) {
+	          indicators++;
+	          break;
+	        }
+	      }
+	      
+	      // Check short duration
+	      if (video.duration > 0 && video.duration < 120) {
+	        const timeEl = document.querySelector('.ytp-time-duration');
+	        if (timeEl?.textContent) indicators++;
+	      }
+	    } catch (e) {
+	      return false;
+	    }
+	
+	    const isAd = indicators >= CONFIG.minAdIndicators;
+	    
 	    // Safety checks - don't interfere with user actions
 	    if (isAd) {
 	      // Only prevent ad-blocking if the user explicitly paused the video
@@ -357,7 +371,7 @@
 	    }
 	    
 	    return isAd;
-  }
+	  }
 
   // ============================================
   // VIDEO STATE MANAGEMENT

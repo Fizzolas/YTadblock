@@ -2,6 +2,13 @@
 
 All notable changes to YouTube Ad Blocker Pro will be documented in this file.
 
+## [1.5.8] - 2025-11-09
+
+### 🚨 Critical Bug Fix
+- **Main Video Skipping:** Fixed the catastrophic bug where the extension would misidentify the main video as an ad and skip it. The ad detection logic (`isAdPlaying`) is now strictly guarded by the official YouTube player class (`.html5-video-player.ad-showing`). If this class is not present, the extension will not interfere with the video, preventing the main content from being skipped.
+
+---
+
 ## [1.5.7] - 2025-11-09
 
 ### 🔧 Stability and Failsafe Improvements
