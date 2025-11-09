@@ -1,4 +1,4 @@
-// YouTube Ad Blocker Pro - Content Script v1.5.0
+// YouTube Ad Blocker Pro - Content Script v1.5.1
 // Production-ready, fully optimized, Chrome Web Store compliant
 
 (function() {
@@ -44,7 +44,8 @@
     sessionStats: { adsBlocked: 0, sponsoredBlocked: 0, popupsRemoved: 0 },
     intervals: { main: null },
     observers: { settings: null },
-    cleanupDone: false
+    cleanupDone: false,
+    initialized: false
   };
 
   // ============================================
@@ -246,7 +247,7 @@
         const el = document.querySelector(sel);
         if (el && isElementVisible(el)) {
           indicators++;
-          break; // Only count once
+          break;
         }
       }
       
@@ -261,7 +262,7 @@
         const btn = document.querySelector(sel);
         if (btn && isElementVisible(btn)) {
           indicators += 2;
-          break; // Only count once
+          break;
         }
       }
       
@@ -272,7 +273,7 @@
           const text = (badge.textContent || '').toLowerCase();
           if (text.includes('ad')) {
             indicators++;
-            break; // Only count once
+            break;
           }
         }
       }
@@ -282,7 +283,7 @@
         const el = document.querySelector(sel);
         if (el && isElementVisible(el)) {
           indicators++;
-          break; // Only count once
+          break;
         }
       }
       
@@ -460,7 +461,7 @@
       state.currentVideoId = videoId;
       state.processingAd = false;
       state.skipAttempts = 0;
-      state.userChangedSpeed = false; // CRITICAL FIX: Reset speed flag on video change
+      state.userChangedSpeed = false;
       log('Video changed');
     }
 
@@ -674,6 +675,11 @@
   
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     try {
+      if (!request?.action) {
+        sendResponse({ error: 'No action specified' });
+        return true;
+      }
+
       switch (request.action) {
         case 'toggle':
           state.isActive = !state.isActive;
@@ -726,8 +732,11 @@
    * Initialize the extension
    */
   function init() {
+    if (state.initialized) return;
+    state.initialized = true;
+
     log('='.repeat(50));
-    log('YouTube Ad Blocker Pro v1.5.0');
+    log('YouTube Ad Blocker Pro v1.5.1');
     log('='.repeat(50));
     
     try {
@@ -753,10 +762,12 @@
     try {
       if (state.intervals.main) {
         clearInterval(state.intervals.main);
+        state.intervals.main = null;
       }
       
       if (state.observers.settings) {
         state.observers.settings.disconnect();
+        state.observers.settings = null;
       }
       
       state.cleanupDone = true;
