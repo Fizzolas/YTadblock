@@ -550,36 +550,45 @@
 	    state.skipAttempts++;
 	    log(`Attempt ${state.skipAttempts}/${CONFIG.maxSkipAttempts}`);
 	
-	    // Priority 1: Skip button
-    if (tryClickSkipButton()) {
-      // Skip button click is the most reliable method.
-      // We rely on the adPlaying check in the next loop iteration to restore state.
-      // Adding a small delay to check if the skip was successful.
-      setTimeout(() => {
-        const v = getVideo();
-        if (v && !isAdPlaying(v)) {
-          restoreVideoState(v);
-        }
-      }, CONFIG.skipRetryDelay);
-      return;
-    }
-    
-    // Priority 2: Fast-forward
-    if (tryFastForward(video)) {
-      // Fast-forwarding is a strong action, we should check if it worked and restore state.
-      setTimeout(() => {
-        const v = getVideo();
-        if (v && !isAdPlaying(v)) {
-          restoreVideoState(v);
-        }
-      }, CONFIG.skipRetryDelay);
-      return;
-    }
-    
-    // Priority 3: Accelerate
-    if (state.skipAttempts >= 2) {
-      accelerateAd(video);
-    }
+	    // --- Ad Skipping Hierarchy (Quickest to Slowest) ---
+	    
+	    // Priority 1: Click Skip Button (Fastest, most reliable method)
+	    if (tryClickSkipButton()) {
+	      // We rely on the adPlaying check in the next loop iteration to restore state.
+	      // Adding a small delay to check if the skip was successful.
+	      setTimeout(() => {
+	        const v = getVideo();
+	        if (v && !isAdPlaying(v)) {
+	          restoreVideoState(v);
+	        }
+	      }, CONFIG.skipRetryDelay);
+	      return;
+	    }
+	    
+	    // Priority 2: Fast-forward (For short, non-skippable ads)
+	    if (tryFastForward(video)) {
+	      // Fast-forwarding is a strong action, we should check if it worked and restore state.
+	      setTimeout(() => {
+	        const v = getVideo();
+	        if (v && !isAdPlaying(v)) {
+	          restoreVideoState(v);
+	        }
+	      }, CONFIG.skipRetryDelay);
+	      return;
+	    }
+	    
+	    // Priority 3: Accelerate (Last resort for long, non-skippable ads)
+	    // We only accelerate after the first attempt to click/fast-forward has failed,
+	    // giving YouTube a chance to load the skip button.
+	    if (state.skipAttempts >= 2) {
+	      accelerateAd(video);
+	    }
+	    
+	    // Priority 4: Seek to End (Final Failsafe)
+	    // If all else fails and we are on the final attempt, seek to the end of the video.
+	    if (state.skipAttempts === CONFIG.maxSkipAttempts) {
+	      tryFastForward(video); // Re-run fast-forward, which will seek to end if possible
+	    }
   }
 
 	// ============================================

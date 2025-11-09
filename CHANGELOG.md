@@ -2,6 +2,16 @@
 
 All notable changes to YouTube Ad Blocker Pro will be documented in this file.
 
+## [1.5.5] - 2025-11-09
+
+### ✨ New Features
+- **Prioritized Ad-Skipping Hierarchy:** Implemented a robust, multi-layered ad-skipping strategy with clear fallbacks for maximum effectiveness and speed.
+
+### 🔧 Technical Improvements
+- **Ad-Skipping Failsafe:** Introduced a final failsafe (Priority 4) to seek to the end of the ad on the last attempt if all other methods (click, fast-forward, accelerate) have failed.
+
+---
+
 ## [1.5.4] - 2025-11-09
 
 ### 🐛 Critical Bug Fixes
