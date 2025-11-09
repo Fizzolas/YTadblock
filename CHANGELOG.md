@@ -2,6 +2,15 @@
 
 All notable changes to YouTube Ad Blocker Pro will be documented in this file.
 
+## [1.5.6] - 2025-11-09
+
+### 🐛 Critical Bug Fixes
+- **Stuck Speed/Mute Fix:** Overhauled `saveVideoState` and `restoreVideoState` to prevent the main video from getting stuck at 8x speed or muted. The restoration logic now runs unconditionally when an ad ends, and the save logic is protected from saving a corrupted ad-accelerated state.
+- **Auto-Unpause Fix:** Fixed the issue where the video would unpause itself. The logic to force playback is now more carefully guarded to only run when an ad is detected and the user has not recently paused the video. The critical fix was to remove the `return` statement after attempting to play a paused ad, ensuring the skip/accelerate logic always runs.
+- **Non-Ad Video Normalization:** Implemented a new check in the main loop to automatically normalize the video speed and mute status (to 1.0x and unmuted) if no ad is detected and the user has not recently interacted, preventing lingering effects from previous ad handling.
+
+---
+
 ## [1.5.5] - 2025-11-09
 
 ### ✨ New Features

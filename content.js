@@ -338,6 +338,7 @@
 	    }
 	    
 	    // Secondary check: If ad is detected but not processed, attempt to play the video.
+	    // This is a critical step to ensure the ad is "active" so the skip button can appear.
 	    if (isAd && video.paused && (!state.userPausedVideo || !userRecentlyInteracted())) {
 	      video.play().catch(e => log('Failed to auto-play ad video in secondary check:', e));
 	    }
@@ -349,50 +350,59 @@
   // VIDEO STATE MANAGEMENT
   // ============================================
   
-  /**
-   * Save current video state before modification
-   * @param {HTMLVideoElement} video - Video element
-   */
-  function saveVideoState(video) {
-    if (!video || state.processingAd) return;
-    
-    try {
-      state.originalPlaybackRate = video.playbackRate || 1;
-      state.originalMuted = video.muted || false;
-      state.originalVolume = video.volume || 1;
-      log('State saved:', { 
-        rate: state.originalPlaybackRate, 
-        muted: state.originalMuted 
-      });
-    } catch (e) {}
-  }
+	  /**
+	   * Save current video state before modification
+	   * @param {HTMLVideoElement} video - Video element
+	   */
+	  function saveVideoState(video) {
+	    if (!video || state.processingAd) return;
+	    
+	    try {
+	      // Only save if the video is not already at max ad speed (to prevent saving a corrupted state)
+	      if (video.playbackRate !== CONFIG.maxAdSpeed) {
+	        state.originalPlaybackRate = video.playbackRate || 1;
+	      } else {
+	        // If it is at max speed, assume the original was 1.0
+	        state.originalPlaybackRate = 1.0;
+	      }
+	      
+	      state.originalMuted = video.muted || false;
+	      state.originalVolume = video.volume || 1;
+	      
+	      log('State saved:', { 
+	        rate: state.originalPlaybackRate, 
+	        muted: state.originalMuted 
+	      });
+	    } catch (e) {}
+	  }
 
-  /**
-   * Restore video state after ad
-   * @param {HTMLVideoElement} video - Video element
-   */
-  function restoreVideoState(video) {
-    if (!video || !state.processingAd) return;
-    
-    try {
-      if (!userRecentlyInteracted()) {
-        if (video.playbackRate !== state.originalPlaybackRate) {
-          video.playbackRate = state.originalPlaybackRate;
-        }
-        if (video.muted !== state.originalMuted) {
-          video.muted = state.originalMuted;
-        }
-        if (Math.abs(video.volume - state.originalVolume) > 0.01) {
-          video.volume = state.originalVolume;
-        }
-      }
-      
-      state.processingAd = false;
-      state.skipAttempts = 0;
-      
-      log('State restored');
-    } catch (e) {}
-  }
+	  /**
+	   * Restore video state after ad
+	   * @param {HTMLVideoElement} video - Video element
+	   */
+	  function restoreVideoState(video) {
+	    if (!video || !state.processingAd) return;
+	    
+	    try {
+	      // Always restore state, regardless of user interaction, to fix stuck speed/mute issues.
+	      // User interaction logic is handled in the ad detection phase.
+	      
+	      if (video.playbackRate !== state.originalPlaybackRate) {
+	        video.playbackRate = state.originalPlaybackRate;
+	      }
+	      if (video.muted !== state.originalMuted) {
+	        video.muted = state.originalMuted;
+	      }
+	      if (Math.abs(video.volume - state.originalVolume) > 0.01) {
+	        video.volume = state.originalVolume;
+	      }
+	      
+	      state.processingAd = false;
+	      state.skipAttempts = 0;
+	      
+	      log('State restored');
+	    } catch (e) {}
+	  }
 
   // ============================================
   // AD SKIPPING
@@ -496,19 +506,31 @@
 
     const videoId = getCurrentVideoId();
     
-    // Reset on video change
-    if (state.currentVideoId !== videoId) {
-      if (state.processingAd) {
-        restoreVideoState(video);
-      }
-      state.currentVideoId = videoId;
-      state.processingAd = false;
-      state.skipAttempts = 0;
-      state.userChangedSpeed = false;
-      log('Video changed');
-    }
-
+	    // Reset on video change
+	    if (state.currentVideoId !== videoId) {
+	      if (state.processingAd) {
+	        restoreVideoState(video);
+	      }
+	      state.currentVideoId = videoId;
+	      state.processingAd = false;
+	      state.skipAttempts = 0;
+	      state.userChangedSpeed = false;
+	      log('Video changed');
+	    }
+	
 	    const adPlaying = isAdPlaying(video);
+	    
+	    // If no ad is playing and we are not processing an ad, ensure video state is normal
+	    if (!adPlaying && !state.processingAd) {
+	      if (video.playbackRate !== 1.0 || video.muted) {
+	        // Only reset if the user hasn't recently interacted
+	        if (!userRecentlyInteracted()) {
+	          video.playbackRate = 1.0;
+	          video.muted = false;
+	          log('Non-ad video state normalized.');
+	        }
+	      }
+	    }
 	    
 	    // Ad ended, restore
 	    if (!adPlaying) {
@@ -536,9 +558,10 @@
 	        video.play().catch(e => log('Failed to auto-play ad video:', e));
 	      }
 	      // If still paused (e.g., due to user interaction or YouTube's block), wait for next interval
+	      // CRITICAL FIX: Do not return here. The ad may be paused but the skip button visible.
+	      // The logic should continue to attempt to click the skip button.
 	      if (video.paused) {
-	        log('Ad detected but video is paused. Waiting for next interval.');
-	        return;
+	        log('Ad detected but video is paused. Attempting skip/fast-forward anyway.');
 	      }
 	    }
 	
