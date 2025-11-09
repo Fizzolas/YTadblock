@@ -7,9 +7,9 @@
   // ============================================
   // CONFIGURATION
   // ============================================
-  const CONFIG = {
-    adCheckInterval: 500,
-    skipRetryDelay: 250,
+	  const CONFIG = {
+	    adCheckInterval: 100, // Reduced from 500ms for near-instant ad detection
+	    skipRetryDelay: 100, // Reduced from 250ms for faster skip attempts
     maxSkipAttempts: 3,
     sponsoredCheckInterval: 2000,
     popupCheckInterval: 1000,
@@ -251,20 +251,20 @@
         }
       }
       
-      // Check player class
-      const player = document.querySelector('.html5-video-player');
-      if (player?.classList.contains('ad-showing')) {
-        indicators += 2;
-      }
-      
-      // Check skip buttons (strong indicator)
-      for (const sel of AD_SELECTORS.skipButtons) {
-        const btn = document.querySelector(sel);
-        if (btn && isElementVisible(btn)) {
-          indicators += 2;
-          break;
-        }
-      }
+	    // Check skip buttons (strongest indicator)
+	    for (const sel of AD_SELECTORS.skipButtons) {
+	      const btn = document.querySelector(sel);
+	      if (btn && isElementVisible(btn)) {
+	        indicators += 3; // Give highest weight to skip button
+	        break;
+	      }
+	    }
+	    
+	    // Check player class
+	    const player = document.querySelector('.html5-video-player');
+	    if (player?.classList.contains('ad-showing')) {
+	      indicators += 2;
+	    }
       
       // Check badges
       for (const sel of AD_SELECTORS.badges) {
@@ -597,9 +597,16 @@
 	  const el = node;
 	  
 	  // 1. Check for Sponsored Content
+	  // Check if the added element itself or any of its children match a sponsored selector
 	  for (const sel of REMOVAL_SELECTORS.slice(0, 10)) { // First 10 are sponsored selectors
 	    if (el.matches(sel)) {
 	      removeElement(el, 'sponsored');
+	      return;
+	    }
+	    // Also check for sponsored elements within the added node's subtree
+	    const sponsoredChild = el.querySelector(sel);
+	    if (sponsoredChild) {
+	      removeElement(sponsoredChild, 'sponsored');
 	      return;
 	    }
 	  }

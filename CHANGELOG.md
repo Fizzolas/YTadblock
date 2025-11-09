@@ -2,6 +2,18 @@
 
 All notable changes to YouTube Ad Blocker Pro will be documented in this file.
 
+## [1.5.2] - 2025-11-09
+
+### ⚡ Performance Optimizations
+- **Ad Detection Speed:** Reduced `adCheckInterval` from 500ms to 100ms for near-instantaneous video ad detection and skipping.
+- **Skip Attempt Speed:** Reduced `skipRetryDelay` from 250ms to 100ms for faster skip button processing.
+- **Ad Indicator Weighting:** Increased the weight of the skip button indicator for more reliable and faster ad confirmation.
+
+### 🐛 Bug Fixes
+- **Sponsored Content Removal:** Fixed a bug where sponsored content was not being properly removed by the `MutationObserver`. The logic now correctly checks for sponsored elements within newly added DOM nodes.
+
+---
+
 ## [1.5.1] - 2025-11-09
 
 This is a major maintenance and optimization release focused on performance, stability, and Chrome Web Store compliance. The core ad-blocking logic has been refactored to be more efficient and less resource-intensive.
