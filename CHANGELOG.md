@@ -2,6 +2,15 @@
 
 All notable changes to YouTube Ad Blocker Pro will be documented in this file.
 
+## [1.5.4] - 2025-11-09
+
+### 🐛 Critical Bug Fixes
+- **Forced Interaction Fix:** Resolved the issue where ads would sometimes pause and require a manual click on a "Play" button. The `tryClickSkipButton` function is now more aggressive, including new selectors for ad-related play/close buttons and attempting multiple click methods for robustness.
+- **Acceleration Fallback:** Ensured that if a skip button is not found, the ad is immediately accelerated to 8x speed, preventing the ad from playing at normal speed.
+- **Ad Playback Check:** Added a secondary check in the ad detection logic to attempt auto-playing the video if an ad is detected but the video is paused, ensuring the skip/acceleration logic can proceed.
+
+---
+
 ## [1.5.3] - 2025-11-09
 
 ### 🐛 Critical Bug Fixes

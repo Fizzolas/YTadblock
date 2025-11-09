@@ -218,12 +218,22 @@
 	      '.ytp-ad-action-interstitial-slot',
 	      '.ytp-ad-text-overlay'
 	    ],
-    skipButtons: [
-      'button.ytp-ad-skip-button',
-      'button.ytp-ad-skip-button-modern',
-      '.ytp-ad-skip-button-container button',
-      'button.ytp-skip-ad-button'
-    ],
+	    skipButtons: [
+	      'button.ytp-ad-skip-button',
+	      'button.ytp-ad-skip-button-modern',
+	      '.ytp-ad-skip-button-container button',
+	      'button.ytp-skip-ad-button',
+	      // New/Aggressive Skip/Close/Play Buttons
+	      '.ytp-ad-overlay-close-button', // Close button for overlays
+	      '.ytp-ad-text-overlay button', // Button on text overlays
+	      '.ytp-ad-action-interstitial-slot button', // Button on interstitial ads
+	      '.ytp-ad-action-interstitial-slot a', // Link on interstitial ads
+	      '.ytp-ad-action-interstitial-slot .ytp-ad-action-interstitial-button', // Specific interstitial button
+	      '.ytp-ad-action-interstitial-button',
+	      '.ytp-ad-action-interstitial-background button',
+	      '.ytp-ad-action-interstitial-background a',
+	      '.ytp-ad-action-interstitial-background'
+	    ],
     badges: [
       '.ytp-ad-text',
       '.ytp-ad-preview-text',
@@ -327,6 +337,11 @@
 	      if (isAd) log('Ad confirmed by muted short video heuristic.');
 	    }
 	    
+	    // Secondary check: If ad is detected but not processed, attempt to play the video.
+	    if (isAd && video.paused && (!state.userPausedVideo || !userRecentlyInteracted())) {
+	      video.play().catch(e => log('Failed to auto-play ad video in secondary check:', e));
+	    }
+	    
 	    return isAd;
   }
 
@@ -387,24 +402,36 @@
    * Try to click skip button
    * @returns {boolean} True if button clicked
    */
-  function tryClickSkipButton() {
-    try {
-      for (const selector of AD_SELECTORS.skipButtons) {
-        const btn = document.querySelector(selector);
-        if (isElementVisible(btn)) {
-          btn.dispatchEvent(new MouseEvent('click', {
-            bubbles: true,
-            cancelable: true,
-            view: window
-          }));
-          btn.click();
-          log('Skip button clicked');
-          return true;
-        }
-      }
-    } catch (e) {}
-    return false;
-  }
+	  /**
+	   * Try to click skip/close/play button
+	   * @returns {boolean} True if button clicked
+	   */
+	  function tryClickSkipButton() {
+	    try {
+	      for (const selector of AD_SELECTORS.skipButtons) {
+	        const btn = document.querySelector(selector);
+	        if (isElementVisible(btn)) {
+	          // Attempt multiple click methods for robustness
+	          btn.click();
+	          btn.dispatchEvent(new MouseEvent('click', {
+	            bubbles: true,
+	            cancelable: true,
+	            view: window
+	          }));
+	          
+	          // Also check for the "Play" button that sometimes appears on ads
+	          if (btn.textContent.toLowerCase().includes('play')) {
+	            log('Ad Play button clicked');
+	          } else {
+	            log('Skip/Close button clicked');
+	          }
+	          
+	          return true;
+	        }
+	      }
+	    } catch (e) {}
+	    return false;
+	  }
 
   /**
    * Accelerate ad playback
