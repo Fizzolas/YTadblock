@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YT AdBlock Pro",
-  "version": "1.5.8",
-  "description": "Blocks all YouTube video ads, skips automatically, and removes sponsored content. Fast, lightweight, and privacy-focused.",
+  "version": "2.0.0",
+  "description": "The ultimate, aggressive YouTube ad blocker. Instantly removes all video ads, sponsored content, banners, and anti-adblock popups for a seamless, uninterrupted viewing experience."}],path:,
   "author": "Fizzolas",
   "homepage_url": "https://github.com/Fizzolas/YTadblock",
   

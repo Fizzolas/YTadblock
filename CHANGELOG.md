@@ -2,6 +2,17 @@
 
 All notable changes to YouTube Ad Blocker Pro will be documented in this file.
 
+## [2.0.0] - 2025-11-09
+
+### 🚀 Major Rewrite: Aggressive & Simplified Core
+- **Complete Codebase Overhaul:** The entire extension logic has been rewritten from the ground up to eliminate all previous stability issues and create a single, highly aggressive, and resilient ad-removal system.
+- **Simplified State Management:** Removed complex, bug-prone state tracking in favor of a single, highly guarded ad-detection loop, ensuring the main video is never interfered with.
+- **Aggressive Video Ad Skipping:** Implemented a new, prioritized ad-skipping hierarchy that uses a 50ms check interval and 16x acceleration as a final failsafe, guaranteeing minimal ad exposure.
+- **Comprehensive Element Removal:** Consolidated all sponsored content, banner ads, and anti-adblock popups into a single, powerful MutationObserver that aggressively removes elements as soon as they appear.
+- **Robust UI/Background:** Simplified `background.js` and `popup.js` to rely solely on `chrome.storage` for state and statistics, removing inter-script communication complexity.
+
+---
+
 ## [1.5.8] - 2025-11-09
 
 ### 🚨 Critical Bug Fix
