@@ -1,2 +1,161 @@
-/* YT Ad Blocker Pro - Ultra Minimal Popup v1.3.0 */
-body{width:280px;margin:0;background:#202223;color:#fff;font-family:sans-serif;font-size:15px;-webkit-font-smoothing:auto;}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#aaa;margin-right:4px;vertical-align:middle;}.dot.dot-ac{background:#27e057;}.status-row{display:flex;align-items:center;justify-content:space-between;margin:12px 0 14px 0;padding:0 3px;}.statustxt{font-size:15px;font-weight:500;}.v{font-size:11px;opacity:.7;}.mainstats-row{display:flex;justify-content:space-between;gap:6px;margin-bottom:6px;}.mainstats-row>div{flex:1;min-width:48px;text-align:center;}.mainstat{font-weight:700;font-size:22px;color:#fff;}.statlbl{font-size:11px;color:#b9babe;margin-bottom:3px;}.session-row{background:#24262a;color:#bbb;font-size:12px;border-radius:7px;padding:5px 0 4px 0;margin:3px 0 12px 0;display:flex;align-items:center;gap:8px;}.session-row>div{margin-right:4px;font-weight:500;}.desc{font-size:12px;color:#b9babe;margin:5px 0 0 4px;line-height:1.35;}.on{background:#23b148;color:#fff;border:none;padding:7px 0;width:100%;font-size:15px;font-weight:600;border-radius:7px;cursor:pointer;margin-bottom:12px;transition:background .15s;}.on:hover{background:#1e9e3b;}.off{background:#d84141;color:#fff;border:none;padding:7px 0;width:100%;font-size:15px;font-weight:600;border-radius:7px;cursor:pointer;margin-bottom:12px;transition:background .15s;}.off:hover{background:#b52d2d;}#toggleBtn:disabled{background:#4b4b4b;opacity:.6;cursor:not-allowed;}
+/* YT Ad Blocker Pro - Optimized Popup Styles */
+
+body {
+  width: 300px;
+  margin: 0;
+  background: #202223;
+  color: #fff;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  padding: 10px;
+}
+
+#popup-root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Status Row */
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  padding: 0 5px;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #aaa;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+.dot-ac {
+  background: #27e057; /* Green for Active */
+}
+
+.statustxt {
+  font-size: 16px;
+  font-weight: 600;
+  flex-grow: 1;
+}
+
+.v {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* Stats Group */
+.stats-group {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.stats-section {
+  background: #24262a;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: #b9babe;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mainstats-row {
+  display: flex;
+  justify-content: space-around;
+  text-align: center;
+}
+
+.mainstats-row > div {
+  flex: 1;
+}
+
+.mainstat {
+  font-weight: 700;
+  font-size: 24px;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.statlbl {
+  font-size: 10px;
+  color: #b9babe;
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+
+.session-row {
+  display: flex;
+  justify-content: space-around;
+  text-align: center;
+}
+
+.session-item {
+  flex: 1;
+}
+
+.session-stat {
+  font-weight: 600;
+  font-size: 18px;
+  color: #fff;
+  line-height: 1.2;
+}
+
+/* Toggle Button */
+#toggleBtn {
+  border: none;
+  padding: 10px 0;
+  width: 100%;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  margin-bottom: 10px;
+}
+
+#toggleBtn.on {
+  background: #23b148; /* Green */
+  color: #fff;
+}
+
+#toggleBtn.on:hover {
+  background: #1e9e3b;
+}
+
+#toggleBtn.off {
+  background: #d84141; /* Red */
+  color: #fff;
+}
+
+#toggleBtn.off:hover {
+  background: #b52d2d;
+}
+
+#toggleBtn:disabled {
+  background: #4b4b4b;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Description */
+.desc {
+  font-size: 11px;
+  color: #b9babe;
+  line-height: 1.4;
+  text-align: center;
+  padding: 0 5px;
+}

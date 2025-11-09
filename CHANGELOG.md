@@ -2,6 +2,30 @@
 
 All notable changes to YouTube Ad Blocker Pro will be documented in this file.
 
+## [1.5.1] - 2025-11-09
+
+This is a major maintenance and optimization release focused on performance, stability, and Chrome Web Store compliance. The core ad-blocking logic has been refactored to be more efficient and less resource-intensive.
+
+### ✨ New Features
+- **Efficient Element Removal:** Implemented a single `MutationObserver` in `content.js` to handle the removal of sponsored content and anti-adblock popups. This replaces the previous resource-heavy periodic checks, leading to significant performance improvements.
+
+### 🔧 Technical Improvements
+- **Manifest V3 Compliance:** Rewrote `manifest.json` to ensure strict compliance with Chrome Web Store policies, requesting only the necessary `storage` and `host_permissions`.
+- **Popup UI Refactor:** Redesigned the extension popup (`popup.html` and `styles.css`) for a cleaner, more functional, and simplified user interface.
+- **Statistics Display:** Simplified statistics display in the popup, focusing on total blocked counts and session counts.
+- **Code Refactoring:** Extensive refactoring across `content.js` and `popup.js` to improve readability, maintainability, and reduce code complexity.
+
+### 🐛 Bug Fixes
+- **Ad Skip State Restoration:** Fixed a critical bug in `content.js` where video state (playback rate, mute status) was not reliably restored after a successful ad skip or fast-forward operation.
+- **Redundant DOM Manipulation:** Removed redundant style setting before element removal in `content.js`.
+- **Popup Error Handling:** Improved error handling in `popup.js` for `chrome.tabs.sendMessage` calls, preventing unhandled promise rejections when the content script is not yet ready.
+
+### ⚡ Performance Optimizations
+- Removed the unnecessary `setInterval` for periodic sponsored content and popup checks, replaced by the new `MutationObserver`.
+- Removed the unnecessary `setInterval` for keep-alive in `background.js`, relying on the modern Service Worker lifecycle management.
+
+---
+
 ## [1.5.0] - 2025-11-08 (Production Release)
 
 ### 🎯 Overview

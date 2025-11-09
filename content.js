@@ -198,12 +198,12 @@
       } catch (e) {}
     };
     
-    // Check for settings menu periodically
-    setInterval(checkSettingsMenu, 5000);
-  }
-
-  // ============================================
-  // AD DETECTION
+	// Check for settings menu periodically
+	    setInterval(checkSettingsMenu, 5000);
+	  }
+	
+	  // ============================================
+	  // AD DETECTION
   // ============================================
   
   const AD_SELECTORS = {
@@ -496,23 +496,27 @@
 
     // Priority 1: Skip button
     if (tryClickSkipButton()) {
+      // Skip button click is the most reliable method.
+      // We rely on the adPlaying check in the next loop iteration to restore state.
+      // Adding a small delay to check if the skip was successful.
       setTimeout(() => {
         const v = getVideo();
         if (v && !isAdPlaying(v)) {
           restoreVideoState(v);
         }
-      }, 500);
+      }, CONFIG.skipRetryDelay);
       return;
     }
     
     // Priority 2: Fast-forward
     if (tryFastForward(video)) {
+      // Fast-forwarding is a strong action, we should check if it worked and restore state.
       setTimeout(() => {
         const v = getVideo();
         if (v && !isAdPlaying(v)) {
           restoreVideoState(v);
         }
-      }, 500);
+      }, CONFIG.skipRetryDelay);
       return;
     }
     
@@ -522,152 +526,142 @@
     }
   }
 
-  // ============================================
-  // SPONSORED CONTENT REMOVAL
-  // ============================================
-  
-  const SPONSORED_SELECTORS = [
-    'ytd-ad-slot-renderer',
-    'ytd-display-ad-renderer',
-    'ytd-promoted-sparkles-web-renderer',
-    'ytd-promoted-video-renderer',
-    'ytd-compact-promoted-video-renderer',
-    'ytd-banner-promo-renderer',
-    'ytd-in-feed-ad-layout-renderer',
-    'ytd-statement-banner-renderer',
-    'ytd-brand-video-shelf-renderer',
-    'ytd-brand-video-singleton-renderer'
-  ];
-
-  /**
-   * Remove sponsored content from page
-   */
-  function removeSponsoredContent() {
-    if (!state.isActive) return;
-    
-    let removed = 0;
-    
-    try {
-      for (const sel of SPONSORED_SELECTORS) {
-        const elements = document.querySelectorAll(sel);
-        for (const el of elements) {
-          if (el && el.parentElement && el.style.display !== 'none') {
-            el.style.setProperty('display', 'none', 'important');
-            el.remove();
-            removed++;
-          }
-        }
-      }
-      
-      if (removed > 0) {
-        state.sessionStats.sponsoredBlocked += removed;
-        sendMessage('sponsoredBlocked', { count: removed });
-        log(`Removed ${removed} sponsored items`);
-      }
-    } catch (e) {}
-  }
-
-  // ============================================
-  // ANTI-ADBLOCK POPUP REMOVAL
-  // ============================================
-  
-  const POPUP_SELECTORS = [
-    'tp-yt-paper-dialog',
-    'ytd-enforcement-message-view-model',
-    'yt-mealbar-promo-renderer',
-    'ytd-popup-container',
-    'tp-yt-paper-dialog.ytd-popup-container'
-  ];
-
-  const POPUP_TEXT_INDICATORS = [
-    'ad blocker',
-    'adblock',
-    'turn off',
-    'allow ads',
-    'disable',
-    'adblocker'
-  ];
-
-  /**
-   * Remove anti-adblock popups
-   */
-  function removeAntiAdblockPopups() {
-    if (!state.isActive) return;
-    
-    let removed = 0;
-    
-    try {
-      for (const sel of POPUP_SELECTORS) {
-        const elements = document.querySelectorAll(sel);
-        for (const el of elements) {
-          if (!el) continue;
-          
-          const text = (el.textContent || '').toLowerCase();
-          
-          for (const indicator of POPUP_TEXT_INDICATORS) {
-            if (text.includes(indicator)) {
-              el.remove();
-              removed++;
-              log('Removed anti-adblock popup');
-              break;
-            }
-          }
-        }
-      }
-      
-      // Remove backdrops
-      const backdrops = document.querySelectorAll('tp-yt-iron-overlay-backdrop, #scrim');
-      for (const el of backdrops) {
-        el.remove();
-        removed++;
-      }
-      
-      if (removed > 0) {
-        state.sessionStats.popupsRemoved += removed;
-        sendMessage('popupRemoved');
-        
-        if (document.body.style.overflow === 'hidden') {
-          document.body.style.overflow = '';
-        }
-      }
-    } catch (e) {}
-  }
-
-  // ============================================
-  // CONSOLIDATED MAIN LOOP
-  // ============================================
-  
-  /**
-   * Main processing loop - handles all periodic tasks
-   */
-  function mainLoop() {
-    try {
-      handleAdSkip();
-    } catch (e) {
-      log('Error in ad handling:', e);
-    }
-    
-    // Run sponsored and popup checks less frequently
-    const now = Date.now();
-    
-    if (!mainLoop.lastSponsored || now - mainLoop.lastSponsored >= CONFIG.sponsoredCheckInterval) {
-      try {
-        removeSponsoredContent();
-      } catch (e) {
-        log('Error in sponsored removal:', e);
-      }
-      mainLoop.lastSponsored = now;
-    }
-    
-    if (!mainLoop.lastPopup || now - mainLoop.lastPopup >= CONFIG.popupCheckInterval) {
-      try {
-        removeAntiAdblockPopups();
-      } catch (e) {
-        log('Error in popup removal:', e);
-      }
-      mainLoop.lastPopup = now;
-    }
-  }
+	// ============================================
+	// ELEMENT REMOVAL (Sponsored Content & Popups)
+	// ============================================
+	
+	const REMOVAL_SELECTORS = [
+	  // Sponsored Content
+	  'ytd-ad-slot-renderer',
+	  'ytd-display-ad-renderer',
+	  'ytd-promoted-sparkles-web-renderer',
+	  'ytd-promoted-video-renderer',
+	  'ytd-compact-promoted-video-renderer',
+	  'ytd-banner-promo-renderer',
+	  'ytd-in-feed-ad-layout-renderer',
+	  'ytd-statement-banner-renderer',
+	  'ytd-brand-video-shelf-renderer',
+	  'ytd-brand-video-singleton-renderer',
+	  // Anti-Adblock Popups & Backdrops
+	  'tp-yt-paper-dialog',
+	  'ytd-enforcement-message-view-model',
+	  'yt-mealbar-promo-renderer',
+	  'ytd-popup-container',
+	  'tp-yt-paper-dialog.ytd-popup-container',
+	  'tp-yt-iron-overlay-backdrop',
+	  '#scrim'
+	];
+	
+	const POPUP_TEXT_INDICATORS = [
+	  'ad blocker',
+	  'adblock',
+	  'turn off',
+	  'allow ads',
+	  'disable',
+	  'adblocker'
+	];
+	
+	/**
+	 * Remove a single element and update stats
+	 * @param {HTMLElement} el - Element to remove
+	 * @param {string} type - 'sponsored' or 'popup'
+	 */
+	function removeElement(el, type) {
+	  if (!el || !el.parentElement) return;
+	  
+	  el.remove();
+	  
+	  if (type === 'sponsored') {
+	    state.sessionStats.sponsoredBlocked++;
+	    sendMessage('sponsoredBlocked');
+	    log('Removed sponsored item');
+	  } else if (type === 'popup') {
+	    state.sessionStats.popupsRemoved++;
+	    sendMessage('popupRemoved');
+	    log('Removed anti-adblock popup/backdrop');
+	    
+	    // Restore scroll if a popup was removed
+	    if (document.body.style.overflow === 'hidden') {
+	      document.body.style.overflow = '';
+	    }
+	  }
+	}
+	
+	/**
+	 * Process a single DOM node for removal
+	 * @param {Node} node - The node to process
+	 */
+	function processNodeForRemoval(node) {
+	  if (!state.isActive || node.nodeType !== 1) return; // Only process element nodes
+	  
+	  const el = node;
+	  
+	  // 1. Check for Sponsored Content
+	  for (const sel of REMOVAL_SELECTORS.slice(0, 10)) { // First 10 are sponsored selectors
+	    if (el.matches(sel)) {
+	      removeElement(el, 'sponsored');
+	      return;
+	    }
+	  }
+	  
+	  // 2. Check for Anti-Adblock Popups
+	  for (const sel of REMOVAL_SELECTORS.slice(10)) { // Remaining are popup/backdrop selectors
+	    if (el.matches(sel)) {
+	      // Check for text indicators only on the main dialog elements, not backdrops
+	      if (el.matches('tp-yt-paper-dialog, ytd-enforcement-message-view-model, ytd-popup-container')) {
+	        const text = (el.textContent || '').toLowerCase();
+	        for (const indicator of POPUP_TEXT_INDICATORS) {
+	          if (text.includes(indicator)) {
+	            removeElement(el, 'popup');
+	            return;
+	          }
+	        }
+	      } else {
+	        // Remove backdrops unconditionally if they match the selector
+	        removeElement(el, 'popup');
+	        return;
+	      }
+	    }
+	  }
+	}
+	
+	/**
+	 * Setup MutationObserver to remove elements as they are added to the DOM
+	 */
+	function setupRemovalObserver() {
+	  const observer = new MutationObserver((mutationsList) => {
+	    for (const mutation of mutationsList) {
+	      if (mutation.type === 'childList') {
+	        mutation.addedNodes.forEach(processNodeForRemoval);
+	      }
+	    }
+	  });
+	  
+	  // Start observing the document body for configured mutations
+	  observer.observe(document.body, { childList: true, subtree: true });
+	  state.observers.removal = observer;
+	  log('Removal observer attached');
+	  
+	  // Initial scan for elements already present
+	  document.querySelectorAll(REMOVAL_SELECTORS.join(', ')).forEach(el => {
+	    processNodeForRemoval(el);
+	  });
+	}
+	
+	// ============================================
+	// CONSOLIDATED MAIN LOOP (Video Player Only)
+	// ============================================
+	
+	/**
+	 * Main processing loop - handles only video player related tasks
+	 */
+	function mainLoop() {
+	  try {
+	    handleAdSkip();
+	  } catch (e) {
+	    log('Error in ad handling:', e);
+	  }
+	}
 
   // ============================================
   // MESSAGE HANDLERS
@@ -742,12 +736,11 @@
     try {
       setupUserInteractionListeners();
       
-      // Start consolidated main loop
-      state.intervals.main = setInterval(mainLoop, CONFIG.adCheckInterval);
-      
-      // Initial cleanup
-      removeSponsoredContent();
-      removeAntiAdblockPopups();
+	// Start consolidated main loop (for video player)
+	      state.intervals.main = setInterval(mainLoop, CONFIG.adCheckInterval);
+	      
+	      // Setup MutationObserver for non-video elements
+	      setupRemovalObserver();
       
       log('Initialized successfully');
     } catch (e) {
@@ -765,21 +758,31 @@
         state.intervals.main = null;
       }
       
-      if (state.observers.settings) {
-        state.observers.settings.disconnect();
-        state.observers.settings = null;
-      }
-      
-      state.cleanupDone = true;
+	      if (state.observers.settings) {
+	        state.observers.settings.disconnect();
+	        state.observers.settings = null;
+	      }
+	      
+	      if (state.observers.removal) {
+	        state.observers.removal.disconnect();
+	        state.observers.removal = null;
+	      }
+	      
+	      state.cleanupDone = true;
       log('Cleanup complete');
     } catch (e) {}
   });
 
   // Start
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  // Run init immediately. The manifest is set to run at document_start,
+  // so we should wait for the document to be interactive.
+  // However, since we use `run_at: document_start` in manifest, we should
+  // use a MutationObserver for the player element instead of DOMContentLoaded.
+  // For now, let's keep the existing logic but ensure it runs.
+  // The `run_at: document_start` means `document.readyState` will be 'loading'.
+  // We will rely on the periodic `getVideo()` call in `setupUserInteractionListeners`
+  // and `handleAdSkip` to find the video element.
+  // The current logic is fine for `document_start` if `init` is called immediately.
+  init();
 
 })();

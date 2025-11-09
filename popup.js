@@ -3,21 +3,21 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   // DOM elements
-  const statusDot = document.getElementById('statusDot');
-  const statusText = document.getElementById('statusText');
-  const toggleBtn = document.getElementById('toggleBtn');
-  const toggleText = document.getElementById('toggleText');
-  const adsBlockedEl = document.getElementById('adsBlocked');
-  const sponsoredBlockedEl = document.getElementById('sponsoredBlocked');
-  const popupsRemovedEl = document.getElementById('popupsRemoved');
-  const timeRunningEl = document.getElementById('timeRunning');
-  const sessionAdsEl = document.getElementById('sessionAdsBlocked');
-  const sessionSponEl = document.getElementById('sessionSponsoredBlocked');
-  const sessionPopupEl = document.getElementById('sessionPopupsRemoved');
-  
-  let currentTab = null;
-  let isYouTubePage = false;
-  let updateInterval = null;
+	  // DOM elements
+	  const statusDot = document.getElementById('statusDot');
+	  const statusText = document.getElementById('statusText');
+	  const toggleBtn = document.getElementById('toggleBtn');
+	  const toggleText = document.getElementById('toggleText');
+	  const totalAdsEl = document.getElementById('totalAds');
+	  const totalSponsoredEl = document.getElementById('totalSponsored');
+	  const totalPopupsEl = document.getElementById('totalPopups');
+	  const sessionAdsEl = document.getElementById('sessionAds');
+	  const sessionSponsoredEl = document.getElementById('sessionSponsored');
+	  const sessionPopupsEl = document.getElementById('sessionPopups');
+	  
+	  let currentTab = null;
+	  let isYouTubePage = false;
+	  let updateInterval = null;
 
   /**
    * Format numbers with locale-specific formatting
@@ -48,8 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   async function getActiveTab() {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      return tab || null;
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      return tabs[0] || null;
     } catch (e) {
       console.error('[YT AdBlock Pro] Error getting tab:', e);
       return null;
@@ -61,28 +61,15 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   async function loadPersistentStats() {
     try {
-      const data = await chrome.storage.local.get([
-        'adsBlocked', 
-        'sponsoredBlocked', 
-        'popupsRemoved', 
-        'installDate'
-      ]);
-      
-      const stats = [
-        data.adsBlocked || 0,
-        data.sponsoredBlocked || 0,
-        data.popupsRemoved || 0,
-        data.installDate ? Math.floor((Date.now() - data.installDate) / 86400000) : 0
-      ];
-      
-      const elements = [adsBlockedEl, sponsoredBlockedEl, popupsRemovedEl, timeRunningEl];
-      
-      elements.forEach((el, i) => {
-        if (el) {
-          const formatted = i === 3 ? `${stats[i]}d` : fmt(stats[i]);
-          updateElement(el, formatted);
-        }
-      });
+	      const data = await chrome.storage.local.get([
+	        'adsBlocked', 
+	        'sponsoredBlocked', 
+	        'popupsRemoved'
+	      ]);
+	      
+	      updateElement(totalAdsEl, fmt(data.adsBlocked || 0));
+	      updateElement(totalSponsoredEl, fmt(data.sponsoredBlocked || 0));
+	      updateElement(totalPopupsEl, fmt(data.popupsRemoved || 0));
     } catch (e) {
       console.error('[YT AdBlock Pro] Error loading persistent stats:', e);
     }
@@ -91,40 +78,40 @@ document.addEventListener('DOMContentLoaded', () => {
   /**
    * Load and display session statistics from content script
    */
-  async function loadSessionStats() {
-    if (!isYouTubePage || !currentTab || !currentTab.id) {
-      [sessionAdsEl, sessionSponEl, sessionPopupEl].forEach(el => {
-        updateElement(el, '-');
-      });
-      return;
-    }
-
-    try {
-      const response = await chrome.tabs.sendMessage(currentTab.id, { 
-        action: 'getSessionStats' 
-      });
-      
-      if (response && typeof response === 'object' && !response.error) {
-        const sessions = [
-          response.adsBlocked || 0,
-          response.sponsoredBlocked || 0,
-          response.popupsRemoved || 0
-        ];
-        
-        const elements = [sessionAdsEl, sessionSponEl, sessionPopupEl];
-        elements.forEach((el, i) => {
-          updateElement(el, fmt(sessions[i]));
-        });
-      } else {
-        throw new Error('Invalid response from content script');
-      }
-    } catch (e) {
-      // Content script not ready - show zeros instead of errors
-      [sessionAdsEl, sessionSponEl, sessionPopupEl].forEach(el => {
-        updateElement(el, '0');
-      });
-    }
-  }
+	  async function loadSessionStats() {
+	    if (!isYouTubePage || !currentTab || !currentTab.id) {
+	      [sessionAdsEl, sessionSponsoredEl, sessionPopupsEl].forEach(el => {
+	        updateElement(el, '-');
+	      });
+	      return;
+	    }
+	
+	    try {
+	      const response = await chrome.tabs.sendMessage(currentTab.id, { 
+	        action: 'getSessionStats' 
+	      }).catch(e => {
+	        console.warn('[YT AdBlock Pro] Content script not ready or error:', e);
+	        return null;
+	      });
+	      
+	      if (response && typeof response === 'object' && !response.error) {
+	        updateElement(sessionAdsEl, fmt(response.adsBlocked || 0));
+	        updateElement(sessionSponsoredEl, fmt(response.sponsoredBlocked || 0));
+	        updateElement(sessionPopupsEl, fmt(response.popupsRemoved || 0));
+	      } else {
+	        // Content script not ready - show zeros instead of errors
+	        [sessionAdsEl, sessionSponsoredEl, sessionPopupsEl].forEach(el => {
+	          updateElement(el, '0');
+	        });
+	      }
+	    } catch (e) {
+	      console.error('[YT AdBlock Pro] Error loading session stats:', e);
+	      // Content script not ready - show zeros instead of errors
+	      [sessionAdsEl, sessionSponsoredEl, sessionPopupsEl].forEach(el => {
+	        updateElement(el, '0');
+	      });
+	    }
+	  }
 
   /**
    * Load all statistics (persistent + session)
@@ -174,6 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const response = await chrome.tabs.sendMessage(currentTab.id, { 
         action: 'getStatus' 
+      }).catch(e => {
+        console.warn('[YT AdBlock Pro] Content script not ready or error:', e);
+        return null;
       });
       
       if (response && typeof response === 'object' && !response.error) {
@@ -194,6 +184,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           const response = await chrome.tabs.sendMessage(currentTab.id, { 
             action: 'toggle' 
+          }).catch(e => {
+            console.error('[YT AdBlock Pro] Error toggling:', e);
+            return null;
           });
           
           if (response && typeof response === 'object' && !response.error) {

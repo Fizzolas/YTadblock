@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "YouTube Ad Blocker Pro",
-  "version": "1.5.0",
-  "description": "Blocks YouTube ads, skips automatically, and removes sponsored content. Fast, lightweight, and privacy-focused.",
+  "name": "YT AdBlock Pro",
+  "version": "1.5.1",
+  "description": "Blocks all YouTube video ads, skips automatically, and removes sponsored content. Fast, lightweight, and privacy-focused.",
   "author": "Fizzolas",
   "homepage_url": "https://github.com/Fizzolas/YTadblock",
   
@@ -28,7 +28,7 @@
   
   "action": {
     "default_popup": "popup.html",
-    "default_title": "YouTube Ad Blocker Pro",
+    "default_title": "YT AdBlock Pro",
     "default_icon": {
       "16": "Icons/icon16.png",
       "48": "Icons/icon48.png",

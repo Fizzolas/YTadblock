@@ -8,37 +8,49 @@
 </head>
 <body>
   <div id="popup-root">
-    <div class="status-row">
-      <span id="statusDot" class="dot"></span>
-      <span id="statusText" class="statustxt">Active</span>
-      <span class="v">v1.5.0</span>
-    </div>
-    <div class="mainstats-row">
-      <div>
-        <div id="adsBlocked" class="mainstat">0</div>
-        <div class="statlbl">Video Ads</div>
-      </div>
-      <div>
-        <div id="sponsoredBlocked" class="mainstat">0</div>
-        <div class="statlbl">Sponsored</div>
-      </div>
-      <div>
-        <div id="popupsRemoved" class="mainstat">0</div>
-        <div class="statlbl">Popups</div>
-      </div>
-      <div>
-        <div id="timeRunning" class="mainstat">0d</div>
-        <div class="statlbl">Days</div>
-      </div>
-    </div>
-    <div class="session-row">
-      <div>Session:</div>
-      <span id="sessionAdsBlocked">0</span>
-      <span id="sessionSponsoredBlocked">0</span>
-      <span id="sessionPopupsRemoved">0</span>
-    </div>
+	    <div class="status-row">
+	      <span id="statusDot" class="dot"></span>
+	      <span id="statusText" class="statustxt">Active</span>
+	      <span class="v">v1.5.1</span>
+	    </div>
+	    <div class="stats-group">
+	      <div class="stats-section">
+	        <div class="section-title">Total Blocked (All Time)</div>
+	        <div class="mainstats-row">
+	          <div>
+	            <div id="totalAds" class="mainstat">0</div>
+	            <div class="statlbl">Video Ads</div>
+	          </div>
+	          <div>
+	            <div id="totalSponsored" class="mainstat">0</div>
+	            <div class="statlbl">Sponsored</div>
+	          </div>
+	          <div>
+	            <div id="totalPopups" class="mainstat">0</div>
+	            <div class="statlbl">Popups</div>
+	          </div>
+	        </div>
+	      </div>
+	      <div class="stats-section">
+	        <div class="section-title">Blocked in Current Session</div>
+	        <div class="session-row">
+	          <div class="session-item">
+	            <div id="sessionAds" class="session-stat">0</div>
+	            <div class="statlbl">Video Ads</div>
+	          </div>
+	          <div class="session-item">
+	            <div id="sessionSponsored" class="session-stat">0</div>
+	            <div class="statlbl">Sponsored</div>
+	          </div>
+	          <div class="session-item">
+	            <div id="sessionPopups" class="session-stat">0</div>
+	            <div class="statlbl">Popups</div>
+	          </div>
+	        </div>
+	      </div>
+	    </div>
     <button id="toggleBtn"><span id="toggleText">Disable</span></button>
-    <div class="desc">Blocks ads automatically. Never interferes with playback.<br/>Respects user controls.</div>
+	    <div class="desc">Blocks ads automatically. Never interferes with playback. Respects user controls.</div>
   </div>
   <script src="popup.js"></script>
 </body>
