@@ -2,6 +2,14 @@
 
 All notable changes to YouTube Ad Blocker Pro will be documented in this file.
 
+## [1.5.7] - 2025-11-09
+
+### 🔧 Stability and Failsafe Improvements
+- **Video Element Robustness:** Enhanced the `getVideo()` function with a fallback selector to correctly identify the video element in various YouTube layouts (e.g., Shorts, different player modes), improving ad detection reliability.
+- **State Reset Failsafe:** Implemented a failsafe in `handleAdSkip` to automatically reset the ad processing state if the video element unexpectedly disappears (e.g., during rapid page navigation), preventing stuck states and lingering side effects.
+
+---
+
 ## [1.5.6] - 2025-11-09
 
 ### 🐛 Critical Bug Fixes

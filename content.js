@@ -66,13 +66,26 @@
    * Get the main video element
    * @returns {HTMLVideoElement|null} Video element or null if not found
    */
-  function getVideo() {
-    try {
-      return document.querySelector('video.html5-main-video');
-    } catch (e) {
-      return null;
-    }
-  }
+	  /**
+	   * Get the main video element, with a fallback for robustness
+	   * @returns {HTMLVideoElement|null} Video element or null if not found
+	   */
+	  function getVideo() {
+	    try {
+	      // Primary selector for the main video player
+	      let video = document.querySelector('video.html5-main-video');
+	      
+	      // Fallback selector for other video elements (e.g., in shorts or different layouts)
+	      if (!video) {
+	        video = document.querySelector('video[src*="googlevideo.com"]');
+	      }
+	      
+	      return video;
+	    } catch (e) {
+	      log('Error in getVideo:', e);
+	      return null;
+	    }
+	  }
 
   /**
    * Get current video ID from URL
@@ -501,8 +514,15 @@
   function handleAdSkip() {
     if (!state.isActive) return;
     
-    const video = getVideo();
-    if (!video) return;
+	    const video = getVideo();
+	    if (!video) {
+	      // Failsafe: If video element disappears, ensure we reset the processing state
+	      if (state.processingAd) {
+	        state.processingAd = false;
+	        log('Video element disappeared. Resetting ad processing state.');
+	      }
+	      return;
+	    }
 
     const videoId = getCurrentVideoId();
     
